@@ -1,0 +1,425 @@
+import React, { useState, useEffect } from 'react';
+import { Search, ArrowUpRight, ArrowDownLeft, CircleAlert, CheckCircle2, AlertCircle, Plus, X, Download } from 'lucide-react';
+import { format } from 'date-fns';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
+
+export default function Accounts() {
+  const [clients, setClients] = useState<any[]>([]);
+  const [selectedClient, setSelectedClient] = useState<string | null>(null);
+  const [accountData, setAccountData] = useState<{ balance: number, movements: any[] } | null>(null);
+  
+  // Payment Modal State
+  const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+  const [paymentAmount, setPaymentAmount] = useState('');
+  const [paymentMethod, setPaymentMethod] = useState<'EFECTIVO' | 'TRANSFERENCIA'>('EFECTIVO');
+  const [paymentOrderId, setPaymentOrderId] = useState<string | null>(null);
+
+  const fetchClients = () => {
+    fetch('/api/clients')
+      .then(res => res.json())
+      .then(data => setClients(data));
+  };
+
+  useEffect(() => {
+    fetchClients();
+  }, []);
+
+  const fetchAccountData = () => {
+    if (selectedClient) {
+      fetch(`/api/clients/${selectedClient}/account`)
+        .then(res => res.json())
+        .then(data => setAccountData(data));
+    } else {
+      setAccountData(null);
+    }
+  };
+
+  useEffect(() => {
+    fetchAccountData();
+  }, [selectedClient]);
+
+  const getStatusColor = (balance: number) => {
+    if (balance <= 0) return 'text-emerald-500'; // Al día
+    if (balance > 0 && balance <= 10000) return 'text-yellow-500'; // Con demora
+    return 'text-red-500'; // En mora
+  };
+
+  const getStatusIcon = (balance: number) => {
+    if (balance <= 0) return <CheckCircle2 className="w-4 h-4 text-emerald-500" />;
+    if (balance > 0 && balance <= 10000) return <CircleAlert className="w-4 h-4 text-yellow-500" />;
+    return <AlertCircle className="w-4 h-4 text-red-500" />;
+  };
+
+  const getStatusText = (balance: number) => {
+    if (balance <= 0) return 'Al día';
+    if (balance > 0 && balance <= 10000) return 'Con demora';
+    return 'En mora';
+  };
+
+  const handleOpenPaymentModal = (orderId: string | null = null, defaultAmount: number = 0) => {
+    setPaymentOrderId(orderId);
+    setPaymentAmount(defaultAmount > 0 ? defaultAmount.toString() : '');
+    setPaymentMethod('EFECTIVO');
+    setIsPaymentModalOpen(true);
+  };
+
+  const handleRegisterPayment = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedClient || !paymentAmount) return;
+
+    const paymentData = {
+      id: crypto.randomUUID(),
+      client_id: selectedClient,
+      order_id: paymentOrderId,
+      amount: parseFloat(paymentAmount),
+      method: paymentMethod,
+      date: new Date().toISOString()
+    };
+
+    await fetch('/api/payments', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(paymentData)
+    });
+
+    setIsPaymentModalOpen(false);
+    fetchAccountData();
+    fetchClients(); // Refresh client list to update balances
+  };
+
+  const generateReport = () => {
+    if (!selectedClient || !accountData) return;
+    
+    const client = clients.find(c => c.id === selectedClient);
+    if (!client) return;
+
+    const doc = new jsPDF();
+    
+    // Header
+    doc.setFontSize(20);
+    doc.text('Reporte de Cuenta Corriente', 14, 22);
+    
+    doc.setFontSize(12);
+    doc.text(`Cliente: ${client.name}`, 14, 32);
+    doc.text(`Fecha: ${format(new Date(), 'dd/MM/yyyy HH:mm')}`, 14, 38);
+    
+    const balanceText = `Saldo Actual: $${Math.abs(accountData.balance).toLocaleString()} ${accountData.balance > 0 ? '(DEUDOR)' : accountData.balance < 0 ? '(ACREEDOR)' : ''}`;
+    doc.setFont(undefined, 'bold');
+    doc.text(balanceText, 14, 46);
+    doc.setFont(undefined, 'normal');
+
+    // Table data
+    const movements = [...accountData.movements].reverse(); // Sort chronologically
+    let runningBalance = 0;
+
+    const tableData = movements.map(mov => {
+      const isOrder = mov.type === 'order';
+      const linkedOrder = !isOrder && mov.order_id ? accountData.movements.find(m => m.type === 'order' && m.id === mov.order_id) : null;
+      
+      const date = format(new Date(mov.date), 'dd/MM/yyyy HH:mm');
+      
+      let detail = '';
+      if (isOrder) {
+        detail = `Remito / Factura ${mov.serial_number ? `#${mov.serial_number}` : ''}\n`;
+        detail += `Total Remito: $${mov.total_amount.toLocaleString()}\n`;
+        detail += `Envases Devueltos: ${mov.containers_returned || 0}`;
+        if (mov.container_total > 0) {
+          detail += `\nEnvases Entregados: ${mov.container_quantity || 0} ($${mov.container_total.toLocaleString()})`;
+        }
+      } else {
+        detail = `Pago (${mov.method})${linkedOrder ? ` a Remito #${linkedOrder.serial_number || linkedOrder.id.substring(0,8)}` : ''}`;
+      }
+
+      const debit = isOrder ? mov.total_amount : 0;
+      const credit = !isOrder ? mov.amount : 0;
+      
+      runningBalance += debit - credit;
+      
+      return [
+        date, 
+        detail, 
+        isOrder ? `$${debit.toLocaleString()}` : '-', 
+        !isOrder ? `$${credit.toLocaleString()}` : '-',
+        `$${runningBalance.toLocaleString()}`
+      ];
+    }).reverse(); // Reverse back to show newest first
+
+    autoTable(doc, {
+      startY: 54,
+      head: [['Fecha', 'Detalle', 'Debe', 'Haber', 'Saldo']],
+      body: tableData,
+      theme: 'grid',
+      headStyles: { fillColor: [20, 20, 20] },
+      styles: { fontSize: 9, cellPadding: 3 },
+      columnStyles: {
+        1: { cellWidth: 80 } // Give more width to detail column
+      }
+    });
+
+    doc.save(`Cuenta_Corriente_${client.name.replace(/\s+/g, '_')}.pdf`);
+  };
+
+  return (
+    <div className="space-y-8">
+      <div className="flex justify-between items-center">
+        <h2 className="text-2xl font-bold tracking-tight">Cuenta Corriente</h2>
+        {selectedClient && (
+          <div className="flex gap-3">
+            <button 
+              onClick={generateReport}
+              className="bg-zinc-800 text-white px-4 py-2 rounded-lg text-sm font-bold tracking-wider uppercase flex items-center gap-2 hover:bg-zinc-700 transition-colors"
+            >
+              <Download className="w-4 h-4" /> Reporte
+            </button>
+            <button 
+              onClick={() => handleOpenPaymentModal(null, accountData?.balance || 0)}
+              className="bg-white text-black px-4 py-2 rounded-lg text-sm font-bold tracking-wider uppercase flex items-center gap-2 hover:bg-zinc-200 transition-colors"
+            >
+              <Plus className="w-4 h-4" /> Registrar Pago
+            </button>
+          </div>
+        )}
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        {/* Client List */}
+        <div className="lg:col-span-1 bg-zinc-950 border border-zinc-800 rounded-2xl overflow-hidden flex flex-col h-[calc(100vh-12rem)]">
+          <div className="p-4 border-b border-zinc-800">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
+              <input
+                type="text"
+                placeholder="Buscar cliente..."
+                className="w-full bg-zinc-900 border border-zinc-800 rounded-lg pl-10 pr-4 py-2 text-sm text-white focus:outline-none focus:border-zinc-600 focus:ring-1 focus:ring-zinc-600"
+              />
+            </div>
+          </div>
+          <div className="flex-1 overflow-y-auto">
+            {clients.map(client => (
+              <button
+                key={client.id}
+                onClick={() => setSelectedClient(client.id)}
+                className={`w-full text-left p-4 border-b border-zinc-800/50 hover:bg-zinc-900/50 transition-colors ${
+                  selectedClient === client.id ? 'bg-zinc-900 border-l-2 border-l-white' : ''
+                }`}
+              >
+                <div className="flex justify-between items-start mb-1">
+                  <div className="font-medium text-white">{client.name}</div>
+                  <div title={getStatusText(client.balance)}>
+                    {getStatusIcon(client.balance)}
+                  </div>
+                </div>
+                <div className="flex justify-between items-center text-xs">
+                  <span className="text-zinc-500 truncate max-w-[120px]">{client.email}</span>
+                  <span className={`font-mono font-bold ${getStatusColor(client.balance)}`}>
+                    ${Math.abs(client.balance).toLocaleString()}
+                  </span>
+                </div>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Account Details */}
+        <div className="lg:col-span-2 bg-zinc-950 border border-zinc-800 rounded-2xl overflow-hidden flex flex-col h-[calc(100vh-12rem)]">
+          {selectedClient && accountData ? (
+            <>
+              <div className="p-6 border-b border-zinc-800 bg-zinc-900/50 flex justify-between items-center">
+                <div>
+                  <h3 className="text-lg font-bold text-white mb-1">
+                    {clients.find(c => c.id === selectedClient)?.name}
+                  </h3>
+                  <div className="flex items-center gap-2">
+                    {getStatusIcon(accountData.balance)}
+                    <span className={`text-xs font-bold tracking-wider uppercase ${getStatusColor(accountData.balance)}`}>
+                      Estado: {getStatusText(accountData.balance)}
+                    </span>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <div className="text-xs font-bold text-zinc-500 tracking-wider uppercase mb-1">Saldo Actual</div>
+                  <div className={`text-3xl font-bold tracking-tighter ${getStatusColor(accountData.balance)}`}>
+                    ${Math.abs(accountData.balance).toLocaleString()}
+                    <span className="text-sm ml-2 font-medium text-zinc-500">
+                      {accountData.balance > 0 ? 'DEUDOR' : accountData.balance < 0 ? 'ACREEDOR' : ''}
+                    </span>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="flex-1 overflow-y-auto p-6">
+                <div className="space-y-4">
+                  {accountData.movements.map((mov, idx) => {
+                    const isOrder = mov.type === 'order';
+                    const linkedOrder = !isOrder && mov.order_id ? accountData.movements.find(m => m.type === 'order' && m.id === mov.order_id) : null;
+                    
+                    return (
+                      <div key={mov.id || idx} className="flex items-center justify-between p-4 rounded-xl border border-zinc-800 bg-zinc-900/30 hover:bg-zinc-900/80 transition-colors">
+                        <div className="flex items-center gap-4">
+                          <div className={`p-3 rounded-full ${isOrder ? 'bg-red-500/10 text-red-500' : 'bg-emerald-500/10 text-emerald-500'}`}>
+                            {isOrder ? <ArrowUpRight className="w-5 h-5" /> : <ArrowDownLeft className="w-5 h-5" />}
+                          </div>
+                          <div>
+                            <div className="font-bold text-white mb-1">
+                              {isOrder ? `Remito / Factura ${mov.serial_number ? `#${mov.serial_number}` : ''}` : `Pago (${mov.method})${linkedOrder ? ` a Remito #${linkedOrder.serial_number || linkedOrder.id.substring(0,8)}` : ''}`}
+                            </div>
+                            <div className="text-xs text-zinc-500 font-mono">
+                              {format(new Date(mov.date), 'dd MMM yyyy HH:mm')}
+                            </div>
+                            {isOrder && mov.payment_status && (
+                              <div className="mt-1">
+                                <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full ${
+                                  mov.payment_status === 'paid' ? 'bg-emerald-500/10 text-emerald-500' :
+                                  mov.payment_status === 'partially_paid' ? 'bg-blue-500/10 text-blue-500' :
+                                  mov.payment_status === 'cancelled' ? 'bg-red-500/10 text-red-500' :
+                                  'bg-amber-500/10 text-amber-500'
+                                }`}>
+                                  {mov.payment_status === 'paid' ? 'Pagado' :
+                                   mov.payment_status === 'partially_paid' ? 'Pagado Parcial' :
+                                   mov.payment_status === 'cancelled' ? 'Cancelado' : 'Pendiente'}
+                                </span>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                        <div className="text-right flex flex-col items-end gap-2">
+                          <div className={`font-mono font-bold text-lg ${isOrder ? 'text-red-400' : 'text-emerald-400'}`}>
+                            {isOrder ? '+' : '-'}${Math.abs(isOrder ? mov.total_amount : mov.amount).toLocaleString()}
+                          </div>
+                          {isOrder && mov.containers_returned > 0 && (
+                            <div className="text-xs text-zinc-500">
+                              {mov.containers_returned} envases devueltos
+                            </div>
+                          )}
+                          {isOrder && mov.payment_status !== 'paid' && mov.payment_status !== 'cancelled' && (
+                            <button
+                              onClick={() => {
+                                const paymentsForOrder = accountData.movements.filter(m => m.type === 'payment' && m.order_id === mov.id);
+                                const totalPaid = paymentsForOrder.reduce((sum, p) => sum + p.amount, 0);
+                                const remaining = mov.total_amount - totalPaid;
+                                handleOpenPaymentModal(mov.id, remaining);
+                              }}
+                              className="text-xs font-bold text-zinc-400 hover:text-white transition-colors uppercase tracking-wider mt-1"
+                            >
+                              Registrar Pago
+                            </button>
+                          )}
+                          {!isOrder && !mov.order_id && (
+                            <button
+                              onClick={async () => {
+                                if (confirm('¿Estás seguro de que deseas eliminar este pago? El saldo del cliente se revertirá.')) {
+                                  try {
+                                    const res = await fetch(`/api/payments/${mov.id}`, { method: 'DELETE' });
+                                    if (!res.ok) throw new Error('Error al eliminar el pago');
+                                    fetchAccountData();
+                                    fetchClients();
+                                  } catch (error) {
+                                    console.error(error);
+                                    alert('Hubo un error al eliminar el pago.');
+                                  }
+                                }
+                              }}
+                              className="text-xs font-bold text-red-500 hover:text-red-400 transition-colors uppercase tracking-wider mt-1"
+                            >
+                              Eliminar Pago
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                  {accountData.movements.length === 0 && (
+                    <div className="text-center text-zinc-500 py-12">
+                      No hay movimientos registrados para este cliente.
+                    </div>
+                  )}
+                </div>
+              </div>
+            </>
+          ) : (
+            <div className="flex-1 flex items-center justify-center text-zinc-500">
+              Selecciona un cliente para ver su cuenta corriente.
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Payment Modal */}
+      {isPaymentModalOpen && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-zinc-950 border border-zinc-800 rounded-2xl w-full max-w-md overflow-hidden">
+            <div className="p-6 border-b border-zinc-800 flex justify-between items-center">
+              <h3 className="text-lg font-bold text-white">
+                {paymentOrderId ? 'Registrar Pago de Remito' : 'Registrar Pago a Cuenta'}
+              </h3>
+              <button 
+                onClick={() => setIsPaymentModalOpen(false)}
+                className="text-zinc-500 hover:text-white transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <form onSubmit={handleRegisterPayment} className="p-6 space-y-6">
+              <div>
+                <label className="block text-xs font-bold text-zinc-500 tracking-wider uppercase mb-2">
+                  Monto a Pagar ($)
+                </label>
+                <input
+                  type="number"
+                  required
+                  min="0.01"
+                  step="0.01"
+                  value={paymentAmount}
+                  onChange={(e) => setPaymentAmount(e.target.value)}
+                  className="w-full bg-zinc-900 border border-zinc-800 rounded-xl p-4 text-white focus:outline-none focus:border-zinc-600 focus:ring-1 focus:ring-zinc-600 text-xl font-medium"
+                  placeholder="0.00"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-xs font-bold text-zinc-500 tracking-wider uppercase mb-2">
+                  Medio de Cobro
+                </label>
+                <div className="grid grid-cols-2 gap-4">
+                  <button
+                    type="button"
+                    onClick={() => setPaymentMethod('EFECTIVO')}
+                    className={`py-3 rounded-xl text-sm font-bold tracking-wider transition-all ${
+                      paymentMethod === 'EFECTIVO'
+                        ? 'bg-zinc-800 text-white border border-zinc-700'
+                        : 'bg-zinc-900 text-zinc-500 border border-zinc-800 hover:border-zinc-700'
+                    }`}
+                  >
+                    EFECTIVO
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPaymentMethod('TRANSFERENCIA')}
+                    className={`py-3 rounded-xl text-sm font-bold tracking-wider transition-all ${
+                      paymentMethod === 'TRANSFERENCIA'
+                        ? 'bg-zinc-800 text-white border border-zinc-700'
+                        : 'bg-zinc-900 text-zinc-500 border border-zinc-800 hover:border-zinc-700'
+                    }`}
+                  >
+                    TRANSFERENCIA
+                  </button>
+                </div>
+              </div>
+
+              <div className="pt-4">
+                <button
+                  type="submit"
+                  disabled={!paymentAmount || parseFloat(paymentAmount) <= 0}
+                  className="w-full bg-white text-black rounded-xl py-4 text-sm font-bold tracking-widest uppercase hover:bg-zinc-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Confirmar Pago
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
