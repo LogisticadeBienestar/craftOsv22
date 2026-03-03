@@ -291,32 +291,32 @@ export default function Invoices() {
     orderItems.forEach((item: any) => {
       const product = products.find(p => p.id === item.product_id);
       const productName = product ? product.name : 'Producto Desconocido';
-      tableData.push([productName, item.quantity.toString(), `$${(item.quantity * item.price).toLocaleString()}`]);
+      tableData.push([productName, item.quantity.toString(), `$${item.price.toLocaleString()}`, `$${(item.quantity * item.price).toLocaleString()}`]);
     });
 
-    tableData.push(['SUBTOTAL', '', `$${order.subtotal?.toLocaleString() || '0'}`]);
+    tableData.push(['SUBTOTAL', '', '', `$${order.subtotal?.toLocaleString() || '0'}`]);
 
     if (order.has_iva) {
-      tableData.push(['IVA (21%)', '', `$${order.iva_amount?.toLocaleString() || '0'}`]);
+      tableData.push(['IVA (21%)', '', '', `$${order.iva_amount?.toLocaleString() || '0'}`]);
     }
 
     if (order.container_quantity > 0) {
-      tableData.push(['ENVASES ENTREGADOS', order.container_quantity.toString(), `$${order.container_total?.toLocaleString() || '0'}`]);
+      tableData.push(['ENVASES ENTREGADOS', order.container_quantity.toString(), '', `$${order.container_total?.toLocaleString() || '0'}`]);
     }
 
     if (order.containers_returned > 0) {
       const containerPrice = parseFloat(settings.container_price) || 0;
       const returnedValue = order.containers_returned * containerPrice;
-      tableData.push(['ENVASES DEVUELTOS', order.containers_returned.toString(), `-$${returnedValue.toLocaleString()}`]);
+      tableData.push(['ENVASES DEVUELTOS', order.containers_returned.toString(), '', `-$${returnedValue.toLocaleString()}`]);
     }
 
     if (order.has_commissioner) {
-      tableData.push(['COMISIONISTA', '1', `$${order.commissioner_amount?.toLocaleString() || '0'}`]);
+      tableData.push(['COMISIONISTA', '1', '', `$${order.commissioner_amount?.toLocaleString() || '0'}`]);
     }
 
     autoTable(doc, {
       startY: 110,
-      head: [['Descripción', 'Cantidad', 'Total']],
+      head: [['Descripción', 'Cantidad', 'Precio Unit.', 'Valor Total']],
       body: tableData,
       theme: 'plain',
       styles: { fontSize: 10 },
@@ -660,8 +660,8 @@ export default function Invoices() {
                       value={order.payment_status || 'pending'}
                       onChange={(e) => updateOrderStatus(order.id, 'payment_status', e.target.value)}
                       className={`bg-transparent border-none text-xs font-bold uppercase tracking-wider focus:ring-0 cursor-pointer ${order.payment_status === 'paid' ? 'text-emerald-500' :
-                          order.payment_status === 'partially_paid' ? 'text-blue-500' :
-                            order.payment_status === 'cancelled' ? 'text-red-500' : 'text-amber-500'
+                        order.payment_status === 'partially_paid' ? 'text-blue-500' :
+                          order.payment_status === 'cancelled' ? 'text-red-500' : 'text-amber-500'
                         }`}
                     >
                       <option value="pending" className="bg-zinc-900 text-amber-500">Pendiente de pago</option>
@@ -675,8 +675,8 @@ export default function Invoices() {
                       value={order.fulfillment_status || 'pending'}
                       onChange={(e) => updateOrderStatus(order.id, 'fulfillment_status', e.target.value)}
                       className={`bg-transparent border-none text-xs font-bold uppercase tracking-wider focus:ring-0 cursor-pointer ${order.fulfillment_status === 'delivered' ? 'text-emerald-500' :
-                          order.fulfillment_status === 'cancelled' || order.fulfillment_status === 'returned' ? 'text-red-500' :
-                            order.fulfillment_status === 'shipped' ? 'text-blue-500' : 'text-amber-500'
+                        order.fulfillment_status === 'cancelled' || order.fulfillment_status === 'returned' ? 'text-red-500' :
+                          order.fulfillment_status === 'shipped' ? 'text-blue-500' : 'text-amber-500'
                         }`}
                     >
                       <option value="pending" className="bg-zinc-900 text-amber-500">En espera de proceso</option>
