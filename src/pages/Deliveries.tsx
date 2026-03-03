@@ -109,18 +109,22 @@ export default function Deliveries() {
   const parsedCollected = parseFloat(collectedAmount) || 0;
 
   const currentClientData = clients.find(c => c.id === selectedClient);
-  const clientPreviousBalance = currentClientData ? (currentClientData.balance > 0 ? currentClientData.balance : 0) : 0;
-
-  const aLiquidarResumen = parsedRemito - containerValue;
-  const aLiquidarTotal = aLiquidarResumen + clientPreviousBalance;
-  const saldoFinal = aLiquidarTotal - parsedCollected;
-
   const activeOrdersForClient = orders.filter(o =>
     o.client_id === selectedClient &&
     o.fulfillment_status !== 'delivered' &&
     o.fulfillment_status !== 'cancelled' &&
     o.fulfillment_status !== 'returned'
   );
+
+  const totalActiveOrdersAmount = activeOrdersForClient.reduce((sum, order) => {
+    return sum + (order.total_amount || 0);
+  }, 0);
+
+  const clientPreviousBalance = currentClientData ? (currentClientData.balance - totalActiveOrdersAmount) : 0;
+
+  const aLiquidarResumen = parsedRemito - containerValue;
+  const aLiquidarTotal = aLiquidarResumen + clientPreviousBalance;
+  const saldoFinal = aLiquidarTotal - parsedCollected;
 
   return (
     <div className="max-w-4xl mx-auto">
@@ -200,10 +204,12 @@ export default function Deliveries() {
               </div>
             </div>
 
-            <div className="flex justify-between items-center mb-4 pt-4 border-t border-zinc-800">
-              <div className="text-xs font-bold text-red-500/80 tracking-wider uppercase">Saldo Anterior (Deuda)</div>
-              <div className="text-xl font-bold tracking-tighter text-red-400">
-                + ${clientPreviousBalance.toLocaleString()}
+            <div className={`flex justify-between items-center mb-4 pt-4 border-t border-zinc-800`}>
+              <div className={`text-xs font-bold tracking-wider uppercase ${clientPreviousBalance >= 0 ? 'text-red-500/80' : 'text-emerald-500/80'}`}>
+                Saldo Anterior {clientPreviousBalance >= 0 ? '(Deuda)' : '(A Favor)'}
+              </div>
+              <div className={`text-xl font-bold tracking-tighter ${clientPreviousBalance >= 0 ? 'text-red-400' : 'text-emerald-400'}`}>
+                {clientPreviousBalance >= 0 ? '+' : '-'} ${Math.abs(clientPreviousBalance).toLocaleString()}
               </div>
             </div>
 
@@ -224,8 +230,8 @@ export default function Deliveries() {
               <button
                 onClick={() => setPaymentMethod('EFECTIVO')}
                 className={`py-4 rounded-xl text-sm font-bold tracking-wider transition-all ${paymentMethod === 'EFECTIVO'
-                    ? 'bg-zinc-800 text-white border border-zinc-700'
-                    : 'bg-zinc-900 text-zinc-500 border border-zinc-800 hover:border-zinc-700'
+                  ? 'bg-zinc-800 text-white border border-zinc-700'
+                  : 'bg-zinc-900 text-zinc-500 border border-zinc-800 hover:border-zinc-700'
                   }`}
               >
                 EFECTIVO
@@ -233,8 +239,8 @@ export default function Deliveries() {
               <button
                 onClick={() => setPaymentMethod('TRANSFERENCIA')}
                 className={`py-4 rounded-xl text-sm font-bold tracking-wider transition-all ${paymentMethod === 'TRANSFERENCIA'
-                    ? 'bg-zinc-800 text-white border border-zinc-700'
-                    : 'bg-zinc-900 text-zinc-500 border border-zinc-800 hover:border-zinc-700'
+                  ? 'bg-zinc-800 text-white border border-zinc-700'
+                  : 'bg-zinc-900 text-zinc-500 border border-zinc-800 hover:border-zinc-700'
                   }`}
               >
                 TRANSFERENCIA
