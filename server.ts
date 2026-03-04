@@ -776,6 +776,22 @@ async function startServer() {
     }
   });
 
+  app.put('/api/washing-prices/:type', async (req, res) => {
+    try {
+      const { type } = req.params;
+      const { price, effective_date } = req.body;
+
+      const { error } = await supabase.from('washing_prices')
+        .update({ price, effective_date })
+        .eq('container_type', type);
+
+      if (error) throw error;
+      res.json({ success: true });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
   // Washing records
   app.get('/api/washing-records', async (req, res) => {
     try {

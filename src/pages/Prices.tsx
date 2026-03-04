@@ -21,22 +21,34 @@ export default function Prices() {
   const handleSaveSettings = async (e: FormEvent) => {
     e.preventDefault();
     setIsSaving(true);
-    await fetch('/api/settings', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(settings)
-    });
-    setIsSaving(false);
-    toast.success('Registro guardado');
+    try {
+      const res = await fetch('/api/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(settings)
+      });
+      if (!res.ok) throw new Error('Error al guardar ajustes');
+      toast.success('Registro guardado');
+    } catch (err) {
+      toast.error('Error al guardar los ajustes generales');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const handleSaveWashingPrice = async (type: string, price: string, date: string) => {
-    await fetch(`/api/washing-prices/${type}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ price: parseFloat(price) || 0, effective_date: date })
-    });
-    toast.success('Registro guardado');
+    try {
+      const res = await fetch(`/api/washing-prices/${type}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ price: parseFloat(price) || 0, effective_date: date })
+      });
+
+      if (!res.ok) throw new Error('Error al guardar');
+      toast.success('Registro guardado');
+    } catch (e) {
+      toast.error('Error al guardar el precio');
+    }
   };
 
   const getWashingPrice = (type: string) => {
