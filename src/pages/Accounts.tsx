@@ -8,6 +8,13 @@ export default function Accounts() {
   const [clients, setClients] = useState<any[]>([]);
   const [selectedClient, setSelectedClient] = useState<string | null>(null);
   const [accountData, setAccountData] = useState<{ balance: number, movements: any[] } | null>(null);
+  const [searchTerm, setSearchTerm] = useState('');
+
+  const filteredClients = clients.filter(c =>
+    c.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (c.email && c.email.toLowerCase().includes(searchTerm.toLowerCase())) ||
+    (c.notes && c.notes.toLowerCase().includes(searchTerm.toLowerCase()))
+  );
 
   // Payment Modal State
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
@@ -191,12 +198,14 @@ export default function Accounts() {
               <input
                 type="text"
                 placeholder="Buscar cliente..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
                 className="w-full bg-zinc-900 border border-zinc-800 rounded-lg pl-10 pr-4 py-2 text-sm text-white focus:outline-none focus:border-zinc-600 focus:ring-1 focus:ring-zinc-600"
               />
             </div>
           </div>
           <div className="flex-1 overflow-y-auto">
-            {clients.map(client => (
+            {filteredClients.map(client => (
               <button
                 key={client.id}
                 onClick={() => setSelectedClient(client.id)}
@@ -204,7 +213,7 @@ export default function Accounts() {
                   }`}
               >
                 <div className="flex justify-between items-start mb-1">
-                  <div className="font-medium text-white">{client.name}</div>
+                  <div className="font-medium text-white">{client.name} {client.notes ? <span className="text-zinc-500 font-normal text-xs ml-1">({client.notes})</span> : ''}</div>
                   <div title={getStatusText(client.balance)}>
                     {getStatusIcon(client.balance)}
                   </div>
@@ -269,9 +278,9 @@ export default function Accounts() {
                             {isOrder && mov.payment_status && (
                               <div className="mt-1">
                                 <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full ${mov.payment_status === 'paid' ? 'bg-emerald-500/10 text-emerald-500' :
-                                    mov.payment_status === 'partially_paid' ? 'bg-blue-500/10 text-blue-500' :
-                                      mov.payment_status === 'cancelled' ? 'bg-red-500/10 text-red-500' :
-                                        'bg-amber-500/10 text-amber-500'
+                                  mov.payment_status === 'partially_paid' ? 'bg-blue-500/10 text-blue-500' :
+                                    mov.payment_status === 'cancelled' ? 'bg-red-500/10 text-red-500' :
+                                      'bg-amber-500/10 text-amber-500'
                                   }`}>
                                   {mov.payment_status === 'paid' ? 'Pagado' :
                                     mov.payment_status === 'partially_paid' ? 'Pagado Parcial' :
@@ -384,8 +393,8 @@ export default function Accounts() {
                     type="button"
                     onClick={() => setPaymentMethod('EFECTIVO')}
                     className={`py-3 rounded-xl text-sm font-bold tracking-wider transition-all ${paymentMethod === 'EFECTIVO'
-                        ? 'bg-zinc-800 text-white border border-zinc-700'
-                        : 'bg-zinc-900 text-zinc-500 border border-zinc-800 hover:border-zinc-700'
+                      ? 'bg-zinc-800 text-white border border-zinc-700'
+                      : 'bg-zinc-900 text-zinc-500 border border-zinc-800 hover:border-zinc-700'
                       }`}
                   >
                     EFECTIVO
@@ -394,8 +403,8 @@ export default function Accounts() {
                     type="button"
                     onClick={() => setPaymentMethod('TRANSFERENCIA')}
                     className={`py-3 rounded-xl text-sm font-bold tracking-wider transition-all ${paymentMethod === 'TRANSFERENCIA'
-                        ? 'bg-zinc-800 text-white border border-zinc-700'
-                        : 'bg-zinc-900 text-zinc-500 border border-zinc-800 hover:border-zinc-700'
+                      ? 'bg-zinc-800 text-white border border-zinc-700'
+                      : 'bg-zinc-900 text-zinc-500 border border-zinc-800 hover:border-zinc-700'
                       }`}
                   >
                     TRANSFERENCIA

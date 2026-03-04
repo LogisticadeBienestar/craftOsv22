@@ -46,7 +46,8 @@ export default function Clients() {
   const filteredClients = clients.filter(c => {
     const matchesSearch = c.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       (c.email && c.email.toLowerCase().includes(searchTerm.toLowerCase())) ||
-      (c.zone && c.zone.toLowerCase().includes(searchTerm.toLowerCase()));
+      (c.zone && c.zone.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      (c.notes && c.notes.toLowerCase().includes(searchTerm.toLowerCase()));
     const matchesZone = zoneFilter === '' || c.zone === zoneFilter;
     return matchesSearch && matchesZone;
   });

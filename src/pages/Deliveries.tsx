@@ -144,7 +144,7 @@ export default function Deliveries() {
             >
               <option value="" disabled>Seleccionar cliente...</option>
               {clients.map(c => (
-                <option key={c.id} value={c.id}>{c.name}</option>
+                <option key={c.id} value={c.id}>{c.name} {c.notes ? `(${c.notes})` : ''}</option>
               ))}
             </select>
           </div>
