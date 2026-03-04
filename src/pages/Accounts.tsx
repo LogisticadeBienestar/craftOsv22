@@ -8,7 +8,7 @@ export default function Accounts() {
   const [clients, setClients] = useState<any[]>([]);
   const [selectedClient, setSelectedClient] = useState<string | null>(null);
   const [accountData, setAccountData] = useState<{ balance: number, movements: any[] } | null>(null);
-  
+
   // Payment Modal State
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const [paymentAmount, setPaymentAmount] = useState('');
@@ -90,20 +90,20 @@ export default function Accounts() {
 
   const generateReport = () => {
     if (!selectedClient || !accountData) return;
-    
+
     const client = clients.find(c => c.id === selectedClient);
     if (!client) return;
 
     const doc = new jsPDF();
-    
+
     // Header
     doc.setFontSize(20);
     doc.text('Reporte de Cuenta Corriente', 14, 22);
-    
+
     doc.setFontSize(12);
     doc.text(`Cliente: ${client.name}`, 14, 32);
     doc.text(`Fecha: ${format(new Date(), 'dd/MM/yyyy HH:mm')}`, 14, 38);
-    
+
     const balanceText = `Saldo Actual: $${Math.abs(accountData.balance).toLocaleString()} ${accountData.balance > 0 ? '(DEUDOR)' : accountData.balance < 0 ? '(ACREEDOR)' : ''}`;
     doc.setFont(undefined, 'bold');
     doc.text(balanceText, 14, 46);
@@ -116,30 +116,30 @@ export default function Accounts() {
     const tableData = movements.map(mov => {
       const isOrder = mov.type === 'order';
       const linkedOrder = !isOrder && mov.order_id ? accountData.movements.find(m => m.type === 'order' && m.id === mov.order_id) : null;
-      
+
       const date = format(new Date(mov.date), 'dd/MM/yyyy HH:mm');
-      
+
       let detail = '';
       if (isOrder) {
         detail = `Remito / Factura ${mov.serial_number ? `#${mov.serial_number}` : ''}\n`;
         detail += `Total Remito: $${mov.total_amount.toLocaleString()}\n`;
         detail += `Envases Devueltos: ${mov.containers_returned || 0}`;
         if (mov.container_total > 0) {
-          detail += `\nEnvases Entregados: ${mov.container_quantity || 0} ($${mov.container_total.toLocaleString()})`;
+          detail += `\nEnvases: ${mov.container_quantity || 0} ($${mov.container_total.toLocaleString()})`;
         }
       } else {
-        detail = `Pago (${mov.method})${linkedOrder ? ` a Remito #${linkedOrder.serial_number || linkedOrder.id.substring(0,8)}` : ''}`;
+        detail = `Pago (${mov.method})${linkedOrder ? ` a Remito #${linkedOrder.serial_number || linkedOrder.id.substring(0, 8)}` : ''}`;
       }
 
       const debit = isOrder ? mov.total_amount : 0;
       const credit = !isOrder ? mov.amount : 0;
-      
+
       runningBalance += debit - credit;
-      
+
       return [
-        date, 
-        detail, 
-        isOrder ? `$${debit.toLocaleString()}` : '-', 
+        date,
+        detail,
+        isOrder ? `$${debit.toLocaleString()}` : '-',
         !isOrder ? `$${credit.toLocaleString()}` : '-',
         `$${runningBalance.toLocaleString()}`
       ];
@@ -166,13 +166,13 @@ export default function Accounts() {
         <h2 className="text-2xl font-bold tracking-tight">Cuenta Corriente</h2>
         {selectedClient && (
           <div className="flex gap-3">
-            <button 
+            <button
               onClick={generateReport}
               className="bg-zinc-800 text-white px-4 py-2 rounded-lg text-sm font-bold tracking-wider uppercase flex items-center gap-2 hover:bg-zinc-700 transition-colors"
             >
               <Download className="w-4 h-4" /> Reporte
             </button>
-            <button 
+            <button
               onClick={() => handleOpenPaymentModal(null, accountData?.balance || 0)}
               className="bg-white text-black px-4 py-2 rounded-lg text-sm font-bold tracking-wider uppercase flex items-center gap-2 hover:bg-zinc-200 transition-colors"
             >
@@ -200,9 +200,8 @@ export default function Accounts() {
               <button
                 key={client.id}
                 onClick={() => setSelectedClient(client.id)}
-                className={`w-full text-left p-4 border-b border-zinc-800/50 hover:bg-zinc-900/50 transition-colors ${
-                  selectedClient === client.id ? 'bg-zinc-900 border-l-2 border-l-white' : ''
-                }`}
+                className={`w-full text-left p-4 border-b border-zinc-800/50 hover:bg-zinc-900/50 transition-colors ${selectedClient === client.id ? 'bg-zinc-900 border-l-2 border-l-white' : ''
+                  }`}
               >
                 <div className="flex justify-between items-start mb-1">
                   <div className="font-medium text-white">{client.name}</div>
@@ -247,13 +246,13 @@ export default function Accounts() {
                   </div>
                 </div>
               </div>
-              
+
               <div className="flex-1 overflow-y-auto p-6">
                 <div className="space-y-4">
                   {accountData.movements.map((mov, idx) => {
                     const isOrder = mov.type === 'order';
                     const linkedOrder = !isOrder && mov.order_id ? accountData.movements.find(m => m.type === 'order' && m.id === mov.order_id) : null;
-                    
+
                     return (
                       <div key={mov.id || idx} className="flex items-center justify-between p-4 rounded-xl border border-zinc-800 bg-zinc-900/30 hover:bg-zinc-900/80 transition-colors">
                         <div className="flex items-center gap-4">
@@ -262,22 +261,21 @@ export default function Accounts() {
                           </div>
                           <div>
                             <div className="font-bold text-white mb-1">
-                              {isOrder ? `Remito / Factura ${mov.serial_number ? `#${mov.serial_number}` : ''}` : `Pago (${mov.method})${linkedOrder ? ` a Remito #${linkedOrder.serial_number || linkedOrder.id.substring(0,8)}` : ''}`}
+                              {isOrder ? `Remito / Factura ${mov.serial_number ? `#${mov.serial_number}` : ''}` : `Pago (${mov.method})${linkedOrder ? ` a Remito #${linkedOrder.serial_number || linkedOrder.id.substring(0, 8)}` : ''}`}
                             </div>
                             <div className="text-xs text-zinc-500 font-mono">
                               {format(new Date(mov.date), 'dd MMM yyyy HH:mm')}
                             </div>
                             {isOrder && mov.payment_status && (
                               <div className="mt-1">
-                                <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full ${
-                                  mov.payment_status === 'paid' ? 'bg-emerald-500/10 text-emerald-500' :
-                                  mov.payment_status === 'partially_paid' ? 'bg-blue-500/10 text-blue-500' :
-                                  mov.payment_status === 'cancelled' ? 'bg-red-500/10 text-red-500' :
-                                  'bg-amber-500/10 text-amber-500'
-                                }`}>
+                                <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full ${mov.payment_status === 'paid' ? 'bg-emerald-500/10 text-emerald-500' :
+                                    mov.payment_status === 'partially_paid' ? 'bg-blue-500/10 text-blue-500' :
+                                      mov.payment_status === 'cancelled' ? 'bg-red-500/10 text-red-500' :
+                                        'bg-amber-500/10 text-amber-500'
+                                  }`}>
                                   {mov.payment_status === 'paid' ? 'Pagado' :
-                                   mov.payment_status === 'partially_paid' ? 'Pagado Parcial' :
-                                   mov.payment_status === 'cancelled' ? 'Cancelado' : 'Pendiente'}
+                                    mov.payment_status === 'partially_paid' ? 'Pagado Parcial' :
+                                      mov.payment_status === 'cancelled' ? 'Cancelado' : 'Pendiente'}
                                 </span>
                               </div>
                             )}
@@ -353,7 +351,7 @@ export default function Accounts() {
               <h3 className="text-lg font-bold text-white">
                 {paymentOrderId ? 'Registrar Pago de Remito' : 'Registrar Pago a Cuenta'}
               </h3>
-              <button 
+              <button
                 onClick={() => setIsPaymentModalOpen(false)}
                 className="text-zinc-500 hover:text-white transition-colors"
               >
@@ -376,7 +374,7 @@ export default function Accounts() {
                   placeholder="0.00"
                 />
               </div>
-              
+
               <div>
                 <label className="block text-xs font-bold text-zinc-500 tracking-wider uppercase mb-2">
                   Medio de Cobro
@@ -385,22 +383,20 @@ export default function Accounts() {
                   <button
                     type="button"
                     onClick={() => setPaymentMethod('EFECTIVO')}
-                    className={`py-3 rounded-xl text-sm font-bold tracking-wider transition-all ${
-                      paymentMethod === 'EFECTIVO'
+                    className={`py-3 rounded-xl text-sm font-bold tracking-wider transition-all ${paymentMethod === 'EFECTIVO'
                         ? 'bg-zinc-800 text-white border border-zinc-700'
                         : 'bg-zinc-900 text-zinc-500 border border-zinc-800 hover:border-zinc-700'
-                    }`}
+                      }`}
                   >
                     EFECTIVO
                   </button>
                   <button
                     type="button"
                     onClick={() => setPaymentMethod('TRANSFERENCIA')}
-                    className={`py-3 rounded-xl text-sm font-bold tracking-wider transition-all ${
-                      paymentMethod === 'TRANSFERENCIA'
+                    className={`py-3 rounded-xl text-sm font-bold tracking-wider transition-all ${paymentMethod === 'TRANSFERENCIA'
                         ? 'bg-zinc-800 text-white border border-zinc-700'
                         : 'bg-zinc-900 text-zinc-500 border border-zinc-800 hover:border-zinc-700'
-                    }`}
+                      }`}
                   >
                     TRANSFERENCIA
                   </button>

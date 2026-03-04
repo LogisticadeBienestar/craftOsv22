@@ -301,7 +301,7 @@ export default function Invoices() {
     }
 
     if (order.container_quantity > 0) {
-      tableData.push(['ENVASES ENTREGADOS', order.container_quantity.toString(), '', `$${order.container_total?.toLocaleString() || '0'}`]);
+      tableData.push(['ENVASES', order.container_quantity.toString(), '', `$${order.container_total?.toLocaleString() || '0'}`]);
     }
 
     if (order.containers_returned > 0) {
