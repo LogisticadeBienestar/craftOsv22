@@ -7,6 +7,9 @@ export default function Clients() {
   const [clients, setClients] = useState<any[]>([]);
   const [zones, setZones] = useState<any[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
+  const [newBalance, setNewBalance] = useState('');
+  const [newBalanceObservation, setNewBalanceObservation] = useState('');
+  const [isEditingBalance, setIsEditingBalance] = useState<string | null>(null);
   const [zoneFilter, setZoneFilter] = useState('');
   const [editingClient, setEditingClient] = useState<any | null>(null);
   const [openDropdownId, setOpenDropdownId] = useState<string | null>(null);
@@ -88,6 +91,27 @@ export default function Clients() {
     setSelectedClients([]);
     setBulkZoneId('');
     fetchClients();
+  };
+
+  const handleBalanceUpdate = async (clientId: string) => {
+    try {
+      const response = await fetch(`/api/clients/${clientId}/balance`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          balance: parseFloat(newBalance),
+          observation: newBalanceObservation
+        }),
+      });
+      if (response.ok) {
+        setIsEditingBalance(null);
+        setNewBalance('');
+        setNewBalanceObservation('');
+        fetchClients();
+      }
+    } catch (error) {
+      console.error('Error updating balance:', error);
+    }
   };
 
   const handleSave = async (e: React.FormEvent) => {
@@ -213,25 +237,27 @@ export default function Clients() {
                 <input
                   type="number"
                   step="0.01"
-                  value={editingClient.balance || 0}
-                  onChange={(e) => setEditingClient({ ...editingClient, balance: parseFloat(e.target.value) })}
+                  value={newBalance}
+                  onChange={(e) => setNewBalance(e.target.value)}
                   className="w-full bg-zinc-900 border border-amber-900/50 rounded-xl p-3 text-amber-500 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 font-mono font-bold"
                 />
                 <button
                   type="button"
-                  onClick={async () => {
-                    await fetch(`/api/clients/${editingClient.id}/balance`, {
-                      method: 'PUT',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({ balance: editingClient.balance })
-                    });
-                    fetchClients();
-                    alert('Saldo actualizado correctamente.');
-                  }}
+                  onClick={() => handleBalanceUpdate(editingClient.id)}
                   className="bg-amber-500/10 text-amber-500 px-6 py-3 rounded-xl text-sm font-bold tracking-wider uppercase hover:bg-amber-500/20 transition-colors whitespace-nowrap"
                 >
                   Actualizar Saldo
                 </button>
+              </div>
+              <div className="mt-4">
+                <label className="block text-xs font-bold text-zinc-500 tracking-wider uppercase mb-2">Observaciones de Saldo</label>
+                <input
+                  type="text"
+                  value={newBalanceObservation}
+                  onChange={(e) => setNewBalanceObservation(e.target.value)}
+                  className="w-full bg-zinc-900 border border-zinc-800 rounded-xl p-3 text-white focus:outline-none focus:border-zinc-600 focus:ring-1 focus:ring-zinc-600"
+                  placeholder="Ej: Arrastre año 2023..."
+                />
               </div>
               <p className="text-xs text-zinc-500 mt-2">Atención: Este valor sobreescribe el balance actual del cliente sin generar un comprobante de pago. Úselo para cargar saldos de arrastre.</p>
             </div>

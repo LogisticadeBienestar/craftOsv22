@@ -1,49 +1,46 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, LineChart, Line, Cell } from 'recharts';
-import { DollarSign, Package, Users, Truck, AlertTriangle, ArrowRightLeft, Droplets, Calendar as CalendarIcon } from 'lucide-react';
+import { DollarSign, Package, Users, Truck, AlertTriangle, ArrowRightLeft, Droplets, Calendar as CalendarIcon, TrendingUp, RefreshCw, AlertCircle, ChevronRight, Filter } from 'lucide-react';
 import { ConfirmModal } from '../components/ConfirmModal';
 import { AlertModal } from '../components/AlertModal';
 import { format } from 'date-fns';
+import { es } from 'date-fns/locale';
 
 export default function Dashboard() {
-  const [stats, setStats] = useState({
-    totalSales: 0,
-    totalCollections: 0,
-    pendingCollections: 0,
-    activeClients: 0,
-    pendingDeliveries: 0,
-    totalDeliveredContainers: 0,
-    totalReturnedContainers: 0,
-    washedContainersStats: {
-      qty200cc: 0,
-      qty500cc: 0,
-      qty800cc: 0,
-      qty910cc: 0,
-      qtyBidones: 0,
-      total: 0
-    },
-    chartData: []
-  });
+  const [data, setData] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+
+  // Date filter state for main dashboard data
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
 
   const [isConfirmOpen, setIsConfirmOpen] = useState(false);
   const [alertConfig, setAlertConfig] = useState<{ isOpen: boolean, title: string, message: string }>({ isOpen: false, title: '', message: '' });
 
   const fetchDashboardData = async () => {
     try {
-      const res = await fetch('/api/dashboard');
-      const data = await res.json();
-      setStats({
-        ...data,
-        washedContainersStats: data.washedContainersStats || { total: 0 }
+      setLoading(true);
+
+      const queryParams = new URLSearchParams();
+      if (startDate) queryParams.append('startDate', startDate);
+      if (endDate) queryParams.append('endDate', endDate);
+
+      const res = await fetch(`/api/dashboard?${queryParams.toString()}`);
+      const fetchedData = await res.json();
+      setData({
+        ...fetchedData,
+        washedContainersStats: fetchedData.washedContainersStats || { total: 0 }
       });
     } catch (error) {
       console.error('Error fetching dashboard data:', error);
+    } finally {
+      setLoading(false);
     }
   };
 
   useEffect(() => {
     fetchDashboardData();
-  }, []);
+  }, [startDate, endDate]);
 
   const executeReset = async () => {
     setIsConfirmOpen(false);
@@ -61,6 +58,18 @@ export default function Dashboard() {
   const handleResetData = () => {
     setIsConfirmOpen(true);
   };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-screen">
+        <div className="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-zinc-500"></div>
+      </div>
+    );
+  }
+
+  if (!data) {
+    return <div className="text-center text-zinc-500 mt-10">No se pudieron cargar los datos del dashboard.</div>;
+  }
 
   return (
     <div className="space-y-8">
@@ -89,55 +98,138 @@ export default function Dashboard() {
 
       {/* Primary Metrics Row */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
-        <StatCard title="Ventas del Mes" value={`$${(stats.totalSales || 0).toLocaleString()}`} icon={DollarSign} trend="" />
-        <StatCard title="Cobranzas" value={`$${(stats.totalCollections || 0).toLocaleString()}`} icon={Wallet} trend="" />
-        <StatCard title="Deuda Pendiente" value={`$${(stats.pendingCollections || 0).toLocaleString()}`} icon={AlertTriangle} trend="" />
-        <StatCard title="Clientes Activos" value={(stats.activeClients || 0).toString()} icon={Users} trend="" />
-        <StatCard title="Entregas Pendientes" value={(stats.pendingDeliveries || 0).toString()} icon={Truck} trend="" />
+        <StatCard title="Ventas del Mes" value={`$${(data.totalSales || 0).toLocaleString()}`} icon={DollarSign} trend="" />
+        <StatCard title="Cobranzas" value={`$${(data.totalCollections || 0).toLocaleString()}`} icon={Wallet} trend="" />
+        <StatCard title="Deuda Pendiente" value={`$${(data.pendingCollections || 0).toLocaleString()}`} icon={AlertTriangle} trend="" />
+        <StatCard title="Clientes Activos" value={(data.activeClients || 0).toString()} icon={Users} trend="" />
+        <StatCard title="Entregas Pendientes" value={(data.pendingDeliveries || 0).toString()} icon={Truck} trend="" />
       </div>
 
-      {/* Secondary Metrics Row (Containers) */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {/* Returned vs Delivered Containers */}
-        <div className="bg-zinc-950 border border-zinc-800 rounded-2xl p-6 flex flex-col justify-between">
-          <div className="flex justify-between items-start mb-4">
-            <div className="p-3 bg-indigo-500/10 rounded-xl">
-              <ArrowRightLeft className="w-5 h-5 text-indigo-400" />
+      {/* Unified Container Metrics (Delivered, Returned, Washed & Delay) */}
+      <div className="lg:col-span-12 bg-zinc-950 border border-zinc-800 rounded-2xl overflow-hidden mt-6">
+        <div className="p-6 border-b border-zinc-800 bg-zinc-900/50 flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-blue-500/10 rounded-xl">
+              <RefreshCw className="w-5 h-5 text-blue-500" />
             </div>
-            <span className="text-xs font-bold px-2 py-1 rounded-full bg-zinc-800 text-zinc-400 tracking-wider">
-              MES ACTUAL
-            </span>
+            <div>
+              <h3 className="text-lg font-bold text-white">Ciclo de Envases (Volumen General)</h3>
+              <p className="text-xs text-zinc-500 font-mono">Entregados vs Devueltos vs Lavados</p>
+            </div>
           </div>
-          <div>
-            <div className="flex gap-4 items-end mb-1">
-              <div>
-                <h3 className="text-3xl font-bold tracking-tighter text-emerald-400">{stats.totalReturnedContainers || 0}</h3>
-                <p className="text-xs font-bold text-zinc-500 tracking-wider uppercase">Vueltos</p>
-              </div>
-              <div className="text-2xl text-zinc-700 pb-1">/</div>
-              <div>
-                <h3 className="text-3xl font-bold tracking-tighter text-zinc-300">{stats.totalDeliveredContainers || 0}</h3>
-                <p className="text-xs font-bold text-zinc-500 tracking-wider uppercase">Entregados</p>
-              </div>
+
+          {/* Date Filters Form */}
+          <div className="flex flex-col sm:flex-row items-center gap-3 bg-zinc-900 border border-zinc-800 p-2 rounded-xl">
+            <div className="flex items-center gap-2 px-2 border-r border-zinc-800/80">
+              <Filter className="w-4 h-4 text-zinc-500" />
+              <span className="text-xs font-bold text-zinc-400 uppercase tracking-wider">Filtro:</span>
             </div>
-            <p className="text-xs font-bold text-zinc-500 tracking-wider uppercase mt-4">Balance Envases (Reparto)</p>
+            <input
+              type="date"
+              value={startDate}
+              onChange={(e) => setStartDate(e.target.value)}
+              className="bg-black/50 border border-zinc-800 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-zinc-600"
+            />
+            <span className="text-zinc-500 text-xs">hasta</span>
+            <input
+              type="date"
+              value={endDate}
+              onChange={(e) => setEndDate(e.target.value)}
+              className="bg-black/50 border border-zinc-800 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-zinc-600"
+            />
+            {(startDate || endDate) && (
+              <button
+                onClick={() => {
+                  setStartDate('');
+                  setEndDate('');
+                }}
+                className="px-3 py-1.5 text-xs font-bold text-red-400 bg-red-400/10 hover:bg-red-400/20 rounded-lg transition-colors ml-1"
+              >
+                Limpiar
+              </button>
+            )}
           </div>
         </div>
 
-        {/* Washed Containers */}
-        <div className="bg-zinc-950 border border-zinc-800 rounded-2xl p-6 flex flex-col justify-between">
-          <div className="flex justify-between items-start mb-4">
-            <div className="p-3 bg-blue-500/10 rounded-xl">
-              <Droplets className="w-5 h-5 text-blue-400" />
+        <div className="p-6">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+
+            {/* Entregados */}
+            <div className="bg-zinc-900/40 border border-zinc-800 rounded-xl p-5 relative overflow-hidden group">
+              <div className="absolute inset-0 bg-gradient-to-br from-blue-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
+              <div className="flex items-center justify-between mb-4">
+                <div className="w-10 h-10 rounded-xl bg-blue-500/10 p-2.5 flex items-center justify-center">
+                  <Package className="w-full h-full text-blue-500" />
+                </div>
+                <div className="text-xs font-bold text-blue-500/50 uppercase tracking-widest bg-blue-500/10 px-3 py-1 rounded-full">
+                  Salida
+                </div>
+              </div>
+              <div className="text-3xl font-bold text-white mb-1 tracking-tight font-mono">
+                {(data.totalDeliveredContainers || 0).toLocaleString()}
+              </div>
+              <div className="text-sm font-medium text-zinc-400">Envases Entregados</div>
             </div>
-            <span className="text-xs font-bold px-2 py-1 rounded-full bg-zinc-800 text-zinc-400 tracking-wider">
-              MES ACTUAL
-            </span>
+
+            {/* Devueltos */}
+            <div className="bg-zinc-900/40 border border-zinc-800 rounded-xl p-5 relative overflow-hidden group">
+              <div className="absolute inset-0 bg-gradient-to-br from-amber-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
+              <div className="flex items-center justify-between mb-4">
+                <div className="w-10 h-10 rounded-xl bg-amber-500/10 p-2.5 flex items-center justify-center">
+                  <RefreshCw className="w-full h-full text-amber-500" />
+                </div>
+                <div className="text-xs font-bold text-amber-500/50 uppercase tracking-widest bg-amber-500/10 px-3 py-1 rounded-full">
+                  Retorno
+                </div>
+              </div>
+              <div className="text-3xl font-bold text-white mb-1 tracking-tight font-mono">
+                {(data.totalReturnedContainers || 0).toLocaleString()}
+              </div>
+              <div className="text-sm font-medium text-zinc-400">Envases Devueltos</div>
+            </div>
+
+            {/* Lavados */}
+            <div className="bg-zinc-900/40 border border-zinc-800 rounded-xl p-5 relative overflow-hidden group">
+              <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
+              <div className="flex items-center justify-between mb-4">
+                <div className="w-10 h-10 rounded-xl bg-emerald-500/10 p-2.5 flex items-center justify-center">
+                  <Droplets className="w-full h-full text-emerald-500" />
+                </div>
+                <div className="text-xs font-bold text-emerald-500/50 uppercase tracking-widest bg-emerald-500/10 px-3 py-1 rounded-full">
+                  Procesado
+                </div>
+              </div>
+              <div className="text-3xl font-bold text-white mb-1 tracking-tight font-mono">
+                {(data.washedContainersStats?.total || 0).toLocaleString()}
+              </div>
+              <div className="text-sm font-medium text-zinc-400">Envases Lavados</div>
+            </div>
+
           </div>
-          <div>
-            <h3 className="text-3xl font-bold tracking-tighter text-blue-400 mb-1">{stats.washedContainersStats?.total || 0}</h3>
-            <p className="text-xs font-bold text-zinc-500 tracking-wider uppercase">Envases Lavados</p>
+
+          {/* Delay Index & Gap Calculation */}
+          <div className="mt-6 pt-6 border-t border-zinc-800/80 grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="bg-zinc-900/50 rounded-xl p-4 flex items-center justify-between border border-zinc-800/50">
+              <div>
+                <h4 className="text-sm font-bold text-white">Brecha de Devolución</h4>
+                <p className="text-xs text-zinc-500 mt-1">Envases en calle pendientes de retornar</p>
+              </div>
+              <div className="text-2xl font-mono font-bold text-amber-500">
+                {Math.max(0, (data.totalDeliveredContainers || 0) - (data.totalReturnedContainers || 0)).toLocaleString()}
+              </div>
+            </div>
+
+            <div className="bg-zinc-900/50 rounded-xl p-4 flex items-center justify-between border border-zinc-800/50">
+              <div>
+                <h4 className="text-sm font-bold text-white">Brecha de Lavado (Stock Sucio)</h4>
+                <p className="text-xs text-zinc-500 mt-1">Envases devueltos pendientes de lavar</p>
+              </div>
+              <div className="text-2xl font-mono font-bold text-blue-400">
+                {Math.max(0, (data.totalReturnedContainers || 0) - (data.washedContainersStats?.total || 0)).toLocaleString()}
+              </div>
+            </div>
           </div>
+
         </div>
       </div>
 
@@ -146,7 +238,7 @@ export default function Dashboard() {
           <h3 className="text-sm font-bold text-zinc-400 tracking-wider uppercase mb-6">Ventas vs Cobranzas (Últimos 7 días)</h3>
           <div className="h-72">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={stats.chartData}>
+              <BarChart data={data.chartData}>
                 <XAxis dataKey="name" stroke="#52525b" fontSize={12} tickLine={false} axisLine={false} />
                 <YAxis stroke="#52525b" fontSize={12} tickLine={false} axisLine={false} tickFormatter={(value) => `$${value}`} />
                 <Tooltip
@@ -164,7 +256,7 @@ export default function Dashboard() {
           <h3 className="text-sm font-bold text-zinc-400 tracking-wider uppercase mb-6">Evolución de Ventas</h3>
           <div className="h-72">
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={stats.chartData}>
+              <LineChart data={data.chartData}>
                 <XAxis dataKey="name" stroke="#52525b" fontSize={12} tickLine={false} axisLine={false} />
                 <YAxis stroke="#52525b" fontSize={12} tickLine={false} axisLine={false} />
                 <Tooltip
@@ -185,12 +277,16 @@ export default function Dashboard() {
 
 function TopProductsSection() {
   const [topProducts, setTopProducts] = useState<any[]>([]);
-  const [startDate, setStartDate] = useState(format(new Date(new Date().setDate(1)), 'yyyy-MM-dd')); // default to 1st of current month
-  const [endDate, setEndDate] = useState(format(new Date(), 'yyyy-MM-dd')); // today
+  const [startDate, setStartDate] = useState(''); // default to empty string
+  const [endDate, setEndDate] = useState(''); // today
 
   const fetchTopProducts = async () => {
     try {
-      const res = await fetch(`/api/dashboard/products?startDate=${startDate}&endDate=${endDate}`);
+      const queryParams = new URLSearchParams();
+      if (startDate) queryParams.append('startDate', startDate);
+      if (endDate) queryParams.append('endDate', endDate);
+
+      const res = await fetch(`/api/dashboard/products?${queryParams.toString()}`);
       const data = await res.json();
       setTopProducts(data);
     } catch (error) {

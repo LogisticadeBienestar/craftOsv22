@@ -7,7 +7,9 @@ import autoTable from 'jspdf-autotable';
 export default function Accounts() {
   const [clients, setClients] = useState<any[]>([]);
   const [selectedClient, setSelectedClient] = useState<string | null>(null);
-  const [accountData, setAccountData] = useState<{ balance: number, movements: any[] } | null>(null);
+  const [clientData, setClientData] = useState<any>(null);
+  const [initialObservation, setInitialObservation] = useState<string | null>(null);
+  const [movements, setMovements] = useState<any[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
 
   const filteredClients = clients.filter(c =>
@@ -32,13 +34,23 @@ export default function Accounts() {
     fetchClients();
   }, []);
 
-  const fetchAccountData = () => {
+  const fetchAccountData = async () => {
     if (selectedClient) {
-      fetch(`/api/clients/${selectedClient}/account`)
-        .then(res => res.json())
-        .then(data => setAccountData(data));
+      const res = await fetch(`/api/clients/${selectedClient}/account`);
+      if (res.ok) {
+        const data = await res.json();
+        setClientData(data);
+        setMovements(data.movements || []);
+        setInitialObservation(data.initialObservation || null);
+      } else {
+        setClientData(null);
+        setMovements([]);
+        setInitialObservation(null);
+      }
     } else {
-      setAccountData(null);
+      setClientData(null);
+      setMovements([]);
+      setInitialObservation(null);
     }
   };
 
@@ -96,12 +108,17 @@ export default function Accounts() {
   };
 
   const generateReport = () => {
-    if (!selectedClient || !accountData) return;
+    if (!selectedClient || !clientData) return;
 
     const client = clients.find(c => c.id === selectedClient);
     if (!client) return;
 
     const doc = new jsPDF();
+
+    // Background color
+    doc.setFillColor(39, 39, 42); // zinc-800
+    doc.rect(0, 0, 210, 297, 'F');
+    doc.setTextColor(255, 255, 255); // White text
 
     // Header
     doc.setFontSize(20);
@@ -111,18 +128,40 @@ export default function Accounts() {
     doc.text(`Cliente: ${client.name}`, 14, 32);
     doc.text(`Fecha: ${format(new Date(), 'dd/MM/yyyy HH:mm')}`, 14, 38);
 
-    const balanceText = `Saldo Actual: $${Math.abs(accountData.balance).toLocaleString()} ${accountData.balance > 0 ? '(DEUDOR)' : accountData.balance < 0 ? '(ACREEDOR)' : ''}`;
+    const balanceText = `Saldo Actual: $${Math.abs(clientData.balance).toLocaleString()} ${clientData.balance > 0 ? '(DEUDOR)' : clientData.balance < 0 ? '(ACREEDOR)' : ''}`;
     doc.setFont(undefined, 'bold');
     doc.text(balanceText, 14, 46);
     doc.setFont(undefined, 'normal');
 
     // Table data
-    const movements = [...accountData.movements].reverse(); // Sort chronologically
-    let runningBalance = 0;
+    const sortedMovements = [...movements].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
-    const tableData = movements.map(mov => {
+    let sumOfMovements = 0;
+    for (const mov of sortedMovements) {
+      if (mov.type === 'order') {
+        sumOfMovements += mov.total_amount;
+      } else {
+        sumOfMovements -= mov.amount;
+      }
+    }
+
+    const initialBalance = clientData.balance - sumOfMovements;
+    let runningBalance = initialBalance;
+
+    const tableData = [];
+
+    // Add initial balance row
+    tableData.push([
+      '-',
+      initialObservation || 'Saldo Inicial / Arrastre',
+      '-',
+      '-',
+      `$${initialBalance.toLocaleString()}`
+    ]);
+
+    for (const mov of sortedMovements) {
       const isOrder = mov.type === 'order';
-      const linkedOrder = !isOrder && mov.order_id ? accountData.movements.find(m => m.type === 'order' && m.id === mov.order_id) : null;
+      const linkedOrder = !isOrder && mov.order_id ? movements.find(m => m.type === 'order' && m.id === mov.order_id) : null;
 
       const date = format(new Date(mov.date), 'dd/MM/yyyy HH:mm');
 
@@ -143,21 +182,22 @@ export default function Accounts() {
 
       runningBalance += debit - credit;
 
-      return [
+      tableData.push([
         date,
         detail,
         isOrder ? `$${debit.toLocaleString()}` : '-',
         !isOrder ? `$${credit.toLocaleString()}` : '-',
         `$${runningBalance.toLocaleString()}`
-      ];
-    }).reverse(); // Reverse back to show newest first
+      ]);
+    }
 
     autoTable(doc, {
       startY: 54,
       head: [['Fecha', 'Detalle', 'Debe', 'Haber', 'Saldo']],
       body: tableData,
       theme: 'grid',
-      headStyles: { fillColor: [20, 20, 20] },
+      headStyles: { fillColor: [20, 20, 20], textColor: [255, 255, 255] },
+      bodyStyles: { textColor: [255, 255, 255] },
       styles: { fontSize: 9, cellPadding: 3 },
       columnStyles: {
         1: { cellWidth: 80 } // Give more width to detail column
@@ -180,7 +220,7 @@ export default function Accounts() {
               <Download className="w-4 h-4" /> Reporte
             </button>
             <button
-              onClick={() => handleOpenPaymentModal(null, accountData?.balance || 0)}
+              onClick={() => handleOpenPaymentModal(null, clientData?.balance || 0)}
               className="bg-white text-black px-4 py-2 rounded-lg text-sm font-bold tracking-wider uppercase flex items-center gap-2 hover:bg-zinc-200 transition-colors"
             >
               <Plus className="w-4 h-4" /> Registrar Pago
@@ -231,7 +271,7 @@ export default function Accounts() {
 
         {/* Account Details */}
         <div className="lg:col-span-2 bg-zinc-950 border border-zinc-800 rounded-2xl overflow-hidden flex flex-col h-[calc(100vh-12rem)]">
-          {selectedClient && accountData ? (
+          {selectedClient && clientData ? (
             <>
               <div className="p-6 border-b border-zinc-800 bg-zinc-900/50 flex justify-between items-center">
                 <div>
@@ -239,104 +279,156 @@ export default function Accounts() {
                     {clients.find(c => c.id === selectedClient)?.name}
                   </h3>
                   <div className="flex items-center gap-2">
-                    {getStatusIcon(accountData.balance)}
-                    <span className={`text-xs font-bold tracking-wider uppercase ${getStatusColor(accountData.balance)}`}>
-                      Estado: {getStatusText(accountData.balance)}
+                    {getStatusIcon(clientData.balance)}
+                    <span className={`text-xs font-bold tracking-wider uppercase ${getStatusColor(clientData.balance)}`}>
+                      Estado: {getStatusText(clientData.balance)}
                     </span>
                   </div>
                 </div>
                 <div className="text-right">
                   <div className="text-xs font-bold text-zinc-500 tracking-wider uppercase mb-1">Saldo Actual</div>
-                  <div className={`text-3xl font-bold tracking-tighter ${getStatusColor(accountData.balance)}`}>
-                    ${Math.abs(accountData.balance).toLocaleString()}
+                  <div className={`text-3xl font-bold tracking-tighter ${getStatusColor(clientData.balance)}`}>
+                    ${Math.abs(clientData.balance).toLocaleString()}
                     <span className="text-sm ml-2 font-medium text-zinc-500">
-                      {accountData.balance > 0 ? 'DEUDOR' : accountData.balance < 0 ? 'ACREEDOR' : ''}
+                      {clientData.balance > 0 ? 'DEUDOR' : clientData.balance < 0 ? 'ACREEDOR' : ''}
                     </span>
                   </div>
                 </div>
               </div>
 
               <div className="flex-1 overflow-y-auto p-6">
-                <div className="space-y-4">
-                  {accountData.movements.map((mov, idx) => {
-                    const isOrder = mov.type === 'order';
-                    const linkedOrder = !isOrder && mov.order_id ? accountData.movements.find(m => m.type === 'order' && m.id === mov.order_id) : null;
+                <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl overflow-hidden mt-6">
+                  <table className="w-full text-left text-sm">
+                    <thead className="bg-zinc-900 text-xs font-bold text-zinc-500 uppercase tracking-wider">
+                      <tr>
+                        <th className="px-6 py-4">Fecha</th>
+                        <th className="px-6 py-4">Detalle</th>
+                        <th className="px-6 py-4 text-right">Débito / Crédito</th>
+                        <th className="px-6 py-4 text-right border-l border-zinc-800">Saldo</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-zinc-800/50">
+                      <tr>
+                        <td className="px-6 py-4 text-zinc-500">-</td>
+                        <td className="px-6 py-4 text-zinc-400 italic font-medium">{initialObservation || 'Saldo Inicial / Arrastre'}</td>
+                        <td className="px-6 py-4 text-right text-zinc-500">-</td>
+                        <td className="px-6 py-4 text-right font-mono font-bold text-white border-l border-zinc-800/50">
+                          ${(() => {
+                            const sortedMovements = [...movements].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+                            let sumOfMovements = 0;
+                            for (const mov of sortedMovements) {
+                              if (mov.type === 'order') {
+                                sumOfMovements += mov.total_amount;
+                              } else {
+                                sumOfMovements -= mov.amount;
+                              }
+                            }
+                            return (clientData.balance - sumOfMovements).toLocaleString();
+                          })()}
+                        </td>
+                      </tr>
+                      {movements.slice().reverse().map((mov, idx) => {
+                        const isOrder = mov.type === 'order';
+                        const linkedOrder = !isOrder && mov.order_id ? movements.find(m => m.type === 'order' && m.id === mov.order_id) : null;
 
-                    return (
-                      <div key={mov.id || idx} className="flex items-center justify-between p-4 rounded-xl border border-zinc-800 bg-zinc-900/30 hover:bg-zinc-900/80 transition-colors">
-                        <div className="flex items-center gap-4">
-                          <div className={`p-3 rounded-full ${isOrder ? 'bg-red-500/10 text-red-500' : 'bg-emerald-500/10 text-emerald-500'}`}>
-                            {isOrder ? <ArrowUpRight className="w-5 h-5" /> : <ArrowDownLeft className="w-5 h-5" />}
-                          </div>
-                          <div>
-                            <div className="font-bold text-white mb-1">
-                              {isOrder ? `Remito / Factura ${mov.serial_number ? `#${mov.serial_number}` : ''}` : `Pago (${mov.method})${linkedOrder ? ` a Remito #${linkedOrder.serial_number || linkedOrder.id.substring(0, 8)}` : ''}`}
-                            </div>
-                            <div className="text-xs text-zinc-500 font-mono">
+                        const debit = isOrder ? mov.total_amount : 0;
+                        const credit = !isOrder ? mov.amount : 0;
+
+                        // Calculate running balance for display
+                        const sortedMovementsForBalance = [...movements].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+                        let currentRunningBalance = (() => {
+                          let sumOfMovementsBeforeCurrent = 0;
+                          for (const m of sortedMovementsForBalance) {
+                            if (m.id === mov.id) break; // Stop at the current movement
+                            if (m.type === 'order') {
+                              sumOfMovementsBeforeCurrent += m.total_amount;
+                            } else {
+                              sumOfMovementsBeforeCurrent -= m.amount;
+                            }
+                          }
+                          return clientData.balance - sumOfMovementsBeforeCurrent;
+                        })();
+
+                        currentRunningBalance += debit - credit;
+
+                        return (
+                          <tr key={mov.id || idx}>
+                            <td className="px-6 py-4 text-zinc-500">
                               {format(new Date(mov.date), 'dd MMM yyyy HH:mm')}
-                            </div>
-                            {isOrder && mov.payment_status && (
-                              <div className="mt-1">
-                                <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full ${mov.payment_status === 'paid' ? 'bg-emerald-500/10 text-emerald-500' :
-                                  mov.payment_status === 'partially_paid' ? 'bg-blue-500/10 text-blue-500' :
-                                    mov.payment_status === 'cancelled' ? 'bg-red-500/10 text-red-500' :
-                                      'bg-amber-500/10 text-amber-500'
-                                  }`}>
-                                  {mov.payment_status === 'paid' ? 'Pagado' :
-                                    mov.payment_status === 'partially_paid' ? 'Pagado Parcial' :
-                                      mov.payment_status === 'cancelled' ? 'Cancelado' : 'Pendiente'}
-                                </span>
+                            </td>
+                            <td className="px-6 py-4">
+                              <div className="font-bold text-white mb-1">
+                                {isOrder ? `Remito / Factura ${mov.serial_number ? `#${mov.serial_number}` : ''}` : `Pago (${mov.method})${linkedOrder ? ` a Remito #${linkedOrder.serial_number || linkedOrder.id.substring(0, 8)}` : ''}`}
                               </div>
-                            )}
-                          </div>
-                        </div>
-                        <div className="text-right flex flex-col items-end gap-2">
-                          <div className={`font-mono font-bold text-lg ${isOrder ? 'text-red-400' : 'text-emerald-400'}`}>
-                            {isOrder ? '+' : '-'}${Math.abs(isOrder ? mov.total_amount : mov.amount).toLocaleString()}
-                          </div>
-                          {isOrder && mov.containers_returned > 0 && (
-                            <div className="text-xs text-zinc-500">
-                              {mov.containers_returned} envases devueltos
-                            </div>
-                          )}
-                          {isOrder && mov.payment_status !== 'paid' && mov.payment_status !== 'cancelled' && (
-                            <button
-                              onClick={() => {
-                                const paymentsForOrder = accountData.movements.filter(m => m.type === 'payment' && m.order_id === mov.id);
-                                const totalPaid = paymentsForOrder.reduce((sum, p) => sum + p.amount, 0);
-                                const remaining = mov.total_amount - totalPaid;
-                                handleOpenPaymentModal(mov.id, remaining);
-                              }}
-                              className="text-xs font-bold text-zinc-400 hover:text-white transition-colors uppercase tracking-wider mt-1"
-                            >
-                              Registrar Pago
-                            </button>
-                          )}
-                          {!isOrder && !mov.order_id && (
-                            <button
-                              onClick={async () => {
-                                if (confirm('¿Estás seguro de que deseas eliminar este pago? El saldo del cliente se revertirá.')) {
-                                  try {
-                                    const res = await fetch(`/api/payments/${mov.id}`, { method: 'DELETE' });
-                                    if (!res.ok) throw new Error('Error al eliminar el pago');
-                                    fetchAccountData();
-                                    fetchClients();
-                                  } catch (error) {
-                                    console.error(error);
-                                    alert('Hubo un error al eliminar el pago.');
-                                  }
-                                }
-                              }}
-                              className="text-xs font-bold text-red-500 hover:text-red-400 transition-colors uppercase tracking-wider mt-1"
-                            >
-                              Eliminar Pago
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
-                  {accountData.movements.length === 0 && (
+                              <div className="text-xs text-zinc-500 font-mono">
+                                {format(new Date(mov.date), 'dd MMM yyyy HH:mm')}
+                              </div>
+                              {isOrder && mov.payment_status && (
+                                <div className="mt-1">
+                                  <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full ${mov.payment_status === 'paid' ? 'bg-emerald-500/10 text-emerald-500' :
+                                    mov.payment_status === 'partially_paid' ? 'bg-blue-500/10 text-blue-500' :
+                                      mov.payment_status === 'cancelled' ? 'bg-red-500/10 text-red-500' :
+                                        'bg-amber-500/10 text-amber-500'
+                                    }`}>
+                                    {mov.payment_status === 'paid' ? 'Pagado' :
+                                      mov.payment_status === 'partially_paid' ? 'Pagado Parcial' :
+                                        mov.payment_status === 'cancelled' ? 'Cancelado' : 'Pendiente'}
+                                  </span>
+                                </div>
+                              )}
+                            </td>
+                            <td className="px-6 py-4 text-right flex flex-col items-end gap-2">
+                              <div className={`font-mono font-bold text-lg ${isOrder ? 'text-red-400' : 'text-emerald-400'}`}>
+                                {isOrder ? '+' : '-'}${Math.abs(isOrder ? mov.total_amount : mov.amount).toLocaleString()}
+                              </div>
+                              {isOrder && mov.containers_returned > 0 && (
+                                <div className="text-xs text-zinc-500">
+                                  {mov.containers_returned} envases devueltos
+                                </div>
+                              )}
+                              {isOrder && mov.payment_status !== 'paid' && mov.payment_status !== 'cancelled' && (
+                                <button
+                                  onClick={() => {
+                                    const paymentsForOrder = movements.filter(m => m.type === 'payment' && m.order_id === mov.id);
+                                    const totalPaid = paymentsForOrder.reduce((sum, p) => sum + p.amount, 0);
+                                    const remaining = mov.total_amount - totalPaid;
+                                    handleOpenPaymentModal(mov.id, remaining);
+                                  }}
+                                  className="text-xs font-bold text-zinc-400 hover:text-white transition-colors uppercase tracking-wider mt-1"
+                                >
+                                  Registrar Pago
+                                </button>
+                              )}
+                              {!isOrder && !mov.order_id && (
+                                <button
+                                  onClick={async () => {
+                                    if (confirm('¿Estás seguro de que deseas eliminar este pago? El saldo del cliente se revertirá.')) {
+                                      try {
+                                        const res = await fetch(`/api/payments/${mov.id}`, { method: 'DELETE' });
+                                        if (!res.ok) throw new Error('Error al eliminar el pago');
+                                        fetchAccountData();
+                                        fetchClients();
+                                      } catch (error) {
+                                        console.error(error);
+                                        alert('Hubo un error al eliminar el pago.');
+                                      }
+                                    }
+                                  }}
+                                  className="text-xs font-bold text-red-500 hover:text-red-400 transition-colors uppercase tracking-wider mt-1"
+                                >
+                                  Eliminar Pago
+                                </button>
+                              )}
+                            </td>
+                            <td className="px-6 py-4 text-right font-mono font-bold text-white border-l border-zinc-800/50">
+                              ${currentRunningBalance.toLocaleString()}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                  {movements.length === 0 && (
                     <div className="text-center text-zinc-500 py-12">
                       No hay movimientos registrados para este cliente.
                     </div>

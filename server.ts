@@ -217,10 +217,15 @@ async function startServer() {
 
   app.put('/api/clients/:id/balance', async (req, res) => {
     const { id } = req.params;
-    const { balance } = req.body;
+    const { balance, observation } = req.body;
     try {
       const { error } = await supabase.from('clients').update({ balance }).eq('id', id);
       if (error) throw error;
+
+      if (observation !== undefined) {
+        await supabase.from('settings').upsert({ key: `balance_obs_${id}`, value: observation });
+      }
+
       res.json({ success: true });
     } catch (error: any) {
       res.status(500).json({ success: false, error: error.message });
@@ -597,9 +602,11 @@ async function startServer() {
       const { data: orders } = await supabase.from('orders').select('*').eq('client_id', id).order('date', { ascending: false });
       const { data: payments } = await supabase.from('payments').select('*').eq('client_id', id).order('date', { ascending: false });
       const { data: client } = await supabase.from('clients').select('balance').eq('id', id).single();
+      const { data: obsData } = await supabase.from('settings').select('value').eq('key', `balance_obs_${id}`).single();
 
       res.json({
         balance: client ? client.balance : 0,
+        initialObservation: obsData ? obsData.value : null,
         movements: [
           ...(orders || []).map((o: any) => ({ ...o, type: 'order' })),
           ...(payments || []).map((p: any) => ({ ...p, type: 'payment' }))
@@ -1023,24 +1030,31 @@ async function startServer() {
   // Dashboard Metrics
   app.get('/api/dashboard', async (req, res) => {
     try {
+      const { startDate, endDate } = req.query;
+
       const now = new Date();
       const year = now.getFullYear();
       const month = String(now.getMonth() + 1).padStart(2, '0');
       const lastDay = new Date(year, now.getMonth() + 1, 0).getDate();
       const day = String(now.getDate()).padStart(2, '0');
 
-      const startOfMonthUTC = `${year}-${month}-01T00:00:00.000Z`;
-      const endOfMonthUTC = `${year}-${month}-${lastDay}T23:59:59.999Z`;
+      let startMonthString = `${year}-${month}-01T00:00:00.000Z`;
+      let endMonthString = `${year}-${month}-${lastDay}T23:59:59.999Z`;
+
+      if (startDate && endDate) {
+        startMonthString = `${startDate}T00:00:00.000Z`;
+        endMonthString = `${endDate}T23:59:59.999Z`;
+      }
 
       const startOfDayUTC = `${year}-${month}-${day}T00:00:00.000Z`;
       const endOfDayUTC = `${year}-${month}-${day}T23:59:59.999Z`;
 
       // Fetch data
-      const { data: monthOrders } = await supabase.from('orders').select('*').gte('date', startOfMonthUTC).lte('date', endOfMonthUTC);
-      const { data: monthPayments } = await supabase.from('payments').select('amount').gte('date', startOfMonthUTC).lte('date', endOfMonthUTC);
+      const { data: monthOrders } = await supabase.from('orders').select('*').gte('date', startMonthString).lte('date', endMonthString);
+      const { data: monthPayments } = await supabase.from('payments').select('amount').gte('date', startMonthString).lte('date', endMonthString);
       const { data: clients } = await supabase.from('clients').select('balance');
       const { data: todayOrders } = await supabase.from('orders').select('fulfillment_status').gte('date', startOfDayUTC).lte('date', endOfDayUTC).neq('fulfillment_status', 'cancelled').neq('fulfillment_status', 'delivered');
-      const { data: washingRecords } = await supabase.from('washing_records').select('*').gte('date', startOfMonthUTC).lte('date', endOfMonthUTC);
+      const { data: washingRecords } = await supabase.from('washing_records').select('*').gte('date', startMonthString).lte('date', endMonthString);
 
       // 1. Total Sales (Mes actual)
       const validMonthOrders = (monthOrders || []).filter((o: any) => o.status !== 'cancelled');

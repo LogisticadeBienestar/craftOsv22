@@ -13,6 +13,7 @@ export default function Audits() {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedOrder, setSelectedOrder] = useState<any | null>(null);
   const [orderItems, setOrderItems] = useState<any[]>([]);
+  const [orderPayments, setOrderPayments] = useState<any[]>([]);
   const [products, setProducts] = useState<any[]>([]);
 
   const [washingRecords, setWashingRecords] = useState<any[]>([]);
@@ -74,11 +75,16 @@ export default function Audits() {
   const handleViewDetails = async (order: any) => {
     setSelectedOrder(order);
     try {
-      const res = await fetch(`/api/orders/${order.id}/items`);
-      const items = await res.json();
+      const [itemsRes, paymentsRes] = await Promise.all([
+        fetch(`/api/orders/${order.id}/items`),
+        fetch(`/api/orders/${order.id}/payments`)
+      ]);
+      const items = await itemsRes.json();
+      const payments = await paymentsRes.json();
       setOrderItems(items);
+      setOrderPayments(payments);
     } catch (error) {
-      console.error('Error fetching order items:', error);
+      console.error('Error fetching order details:', error);
     }
   };
 
@@ -768,6 +774,40 @@ export default function Audits() {
                   <span className="font-bold text-white">Total Final:</span>
                   <span className="text-xl font-bold text-emerald-500 font-mono">${selectedOrder.total_amount?.toLocaleString() || 0}</span>
                 </div>
+              </div>
+              {/* Payment Details Section */}
+              <div className="border border-zinc-800 rounded-xl overflow-hidden mt-6">
+                <div className="bg-zinc-900 px-4 py-3 border-b border-zinc-800">
+                  <h4 className="text-xs font-bold text-zinc-400 uppercase tracking-wider">Detalle de Cobros Registrados</h4>
+                </div>
+                {orderPayments.length > 0 ? (
+                  <table className="w-full text-left text-sm">
+                    <thead className="bg-zinc-900/50 text-xs font-bold text-zinc-500 uppercase tracking-wider">
+                      <tr>
+                        <th className="px-4 py-3">Fecha</th>
+                        <th className="px-4 py-3">Método</th>
+                        <th className="px-4 py-3 text-right">Monto</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-zinc-800">
+                      {orderPayments.map((payment, idx) => (
+                        <tr key={idx}>
+                          <td className="px-4 py-3 text-zinc-400">{formatDate(payment.date)}</td>
+                          <td className="px-4 py-3">
+                            <span className={`px-2 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${payment.method === 'EFECTIVO' ? 'bg-emerald-500/10 text-emerald-500' : 'bg-blue-500/10 text-blue-500'}`}>
+                              {payment.method}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-right font-mono text-emerald-400 font-bold">${payment.amount.toLocaleString()}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                ) : (
+                  <div className="p-4 text-center text-sm text-zinc-500 italic">
+                    Sin cobros registrados para esta entrega.
+                  </div>
+                )}
               </div>
             </div>
 
