@@ -128,7 +128,7 @@ export default function Accounts() {
     doc.text(`Cliente: ${client.name}`, 14, 32);
     doc.text(`Fecha: ${format(new Date(), 'dd/MM/yyyy HH:mm')}`, 14, 38);
 
-    const balanceText = `Saldo Actual: $${Math.abs(clientData.balance).toLocaleString()} ${clientData.balance > 0 ? '(DEUDOR)' : clientData.balance < 0 ? '(ACREEDOR)' : ''}`;
+    const balanceText = `Saldo pendiente de pago: $${Math.abs(clientData.balance).toLocaleString()}`;
     doc.setFont(undefined, 'bold');
     doc.text(balanceText, 14, 46);
     doc.setFont(undefined, 'normal');
@@ -197,7 +197,7 @@ export default function Accounts() {
       body: tableData,
       theme: 'grid',
       headStyles: { fillColor: [20, 20, 20], textColor: [255, 255, 255] },
-      bodyStyles: { textColor: [255, 255, 255] },
+      bodyStyles: { textColor: [0, 0, 0] },
       styles: { fontSize: 9, cellPadding: 3 },
       columnStyles: {
         1: { cellWidth: 80 } // Give more width to detail column
@@ -286,12 +286,9 @@ export default function Accounts() {
                   </div>
                 </div>
                 <div className="text-right">
-                  <div className="text-xs font-bold text-zinc-500 tracking-wider uppercase mb-1">Saldo Actual</div>
+                  <div className="text-xs font-bold text-zinc-500 tracking-wider uppercase mb-1">Saldo Pendiente de Pago</div>
                   <div className={`text-3xl font-bold tracking-tighter ${getStatusColor(clientData.balance)}`}>
                     ${Math.abs(clientData.balance).toLocaleString()}
-                    <span className="text-sm ml-2 font-medium text-zinc-500">
-                      {clientData.balance > 0 ? 'DEUDOR' : clientData.balance < 0 ? 'ACREEDOR' : ''}
-                    </span>
                   </div>
                 </div>
               </div>
