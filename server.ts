@@ -573,27 +573,7 @@ async function startServer() {
     }
   });
 
-  // Reset Data
-  app.post('/api/reset', async (req, res) => {
-    try {
-      // Supabase JS requires a filter for delete. We use neq('id', '') to match all string IDs, or neq('id', null) for UUIDs.
-      // Since some tables use different ID types, generic filters depend on column. 
-      // Safest is to use an "in" with all IDs or just write a reset SQL script instead. 
-      // We will perform naive delete matching any non-null ID since all tables have 'id' column.
-      const tables = ['payments', 'order_items', 'orders', 'washing_records', 'vehicle_usage', 'advances', 'tasks', 'settlements', 'company_expenses'];
-      for (const table of tables) {
-        await supabase.from(table).delete().not('id', 'is', null);
-      }
 
-      // Reset client balances
-      await supabase.from('clients').update({ balance: 0 }).not('id', 'is', null);
-
-      res.json({ success: true });
-    } catch (error: any) {
-      console.error('Error resetting data:', error);
-      res.status(500).json({ error: error.message });
-    }
-  });
 
   // Current Account (Cuenta Corriente)
   app.get('/api/clients/:id/account', async (req, res) => {

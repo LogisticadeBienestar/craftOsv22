@@ -14,7 +14,6 @@ export default function Dashboard() {
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
 
-  const [isConfirmOpen, setIsConfirmOpen] = useState(false);
   const [alertConfig, setAlertConfig] = useState<{ isOpen: boolean, title: string, message: string }>({ isOpen: false, title: '', message: '' });
 
   const fetchDashboardData = async () => {
@@ -42,23 +41,6 @@ export default function Dashboard() {
     fetchDashboardData();
   }, [startDate, endDate]);
 
-  const executeReset = async () => {
-    setIsConfirmOpen(false);
-    try {
-      const res = await fetch('/api/reset', { method: 'POST' });
-      if (!res.ok) throw new Error('Error al reiniciar los datos');
-      setAlertConfig({ isOpen: true, title: 'Éxito', message: 'Todos los datos transaccionales han sido eliminados correctamente.' });
-      fetchDashboardData();
-    } catch (error) {
-      console.error(error);
-      setAlertConfig({ isOpen: true, title: 'Error', message: 'Hubo un error al reiniciar los datos.' });
-    }
-  };
-
-  const handleResetData = () => {
-    setIsConfirmOpen(true);
-  };
-
   if (loading) {
     return (
       <div className="flex items-center justify-center h-screen">
@@ -73,13 +55,6 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-8">
-      <ConfirmModal
-        isOpen={isConfirmOpen}
-        title="Resetear Movimientos"
-        message="¡ATENCIÓN! ¿Estás seguro de que deseas eliminar TODOS los remitos, pagos y movimientos? Los clientes y productos se mantendrán, pero los saldos volverán a cero. Esta acción NO se puede deshacer."
-        onConfirm={executeReset}
-        onCancel={() => setIsConfirmOpen(false)}
-      />
       <AlertModal
         isOpen={alertConfig.isOpen}
         title={alertConfig.title}
@@ -88,12 +63,6 @@ export default function Dashboard() {
       />
       <div className="flex justify-between items-center">
         <h2 className="text-2xl font-bold tracking-tight">Dashboard</h2>
-        <button
-          onClick={handleResetData}
-          className="bg-red-500/10 text-red-500 hover:bg-red-500/20 px-4 py-2 rounded-lg text-sm font-bold tracking-wider uppercase flex items-center gap-2 transition-colors"
-        >
-          <AlertTriangle className="w-4 h-4" /> Resetear Movimientos
-        </button>
       </div>
 
       {/* Primary Metrics Row */}
