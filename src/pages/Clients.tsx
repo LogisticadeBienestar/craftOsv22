@@ -104,9 +104,7 @@ export default function Clients() {
         }),
       });
       if (response.ok) {
-        setIsEditingBalance(null);
-        setNewBalance('');
-        setNewBalanceObservation('');
+        alert('Saldo y observaciones actualizados correctamente.');
         fetchClients();
       }
     } catch (error) {
@@ -135,6 +133,17 @@ export default function Clients() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(editingClient)
       });
+      
+      if (isAdmin && newBalanceObservation !== 'Cargando...') {
+        await fetch(`/api/clients/${editingClient.id}/balance`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            balance: parseFloat(newBalance || editingClient.balance?.toString() || '0'),
+            observation: newBalanceObservation
+          }),
+        });
+      }
     }
 
     setEditingClient(null);
@@ -251,11 +260,11 @@ export default function Clients() {
               </div>
               <div className="mt-4">
                 <label className="block text-xs font-bold text-zinc-500 tracking-wider uppercase mb-2">Observaciones de Saldo</label>
-                <input
-                  type="text"
+                <textarea
                   value={newBalanceObservation}
                   onChange={(e) => setNewBalanceObservation(e.target.value)}
-                  className="w-full bg-zinc-900 border border-zinc-800 rounded-xl p-3 text-white focus:outline-none focus:border-zinc-600 focus:ring-1 focus:ring-zinc-600"
+                  rows={4}
+                  className="w-full bg-zinc-900 border border-zinc-800 rounded-xl p-3 text-white focus:outline-none focus:border-zinc-600 focus:ring-1 focus:ring-zinc-600 resize-none"
                   placeholder="Ej: Arrastre año 2023..."
                 />
               </div>
@@ -393,7 +402,18 @@ export default function Clients() {
                 {openDropdownId === client.id && (
                   <div className="absolute right-0 mt-2 w-48 bg-zinc-900 border border-zinc-800 rounded-xl shadow-xl z-10 overflow-hidden">
                     <button
-                      onClick={() => { setEditingClient(client); setOpenDropdownId(null); }}
+                      onClick={() => { 
+                        setEditingClient(client); 
+                        setOpenDropdownId(null); 
+                        setNewBalance(client.balance ? client.balance.toString() : '0');
+                        setNewBalanceObservation('Cargando...');
+                        fetch(`/api/clients/${client.id}/account?_t=${Date.now()}`)
+                          .then(res => res.json())
+                          .then(data => {
+                            setNewBalanceObservation(data.initialObservation || '');
+                          })
+                          .catch(() => setNewBalanceObservation(''));
+                      }}
                       className="w-full text-left px-4 py-3 text-sm text-white hover:bg-zinc-800 flex items-center gap-2"
                     >
                       <Edit2 className="w-4 h-4 text-zinc-400" /> Editar cliente

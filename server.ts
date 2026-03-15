@@ -602,7 +602,7 @@ async function startServer() {
       const { data: orders } = await supabase.from('orders').select('*').eq('client_id', id).order('date', { ascending: false });
       const { data: payments } = await supabase.from('payments').select('*').eq('client_id', id).order('date', { ascending: false });
       const { data: client } = await supabase.from('clients').select('balance').eq('id', id).single();
-      const { data: obsData } = await supabase.from('settings').select('value').eq('key', `balance_obs_${id}`).single();
+      const { data: obsData } = await supabase.from('settings').select('value').eq('key', `balance_obs_${id}`).maybeSingle();
 
       res.json({
         balance: client ? client.balance : 0,
