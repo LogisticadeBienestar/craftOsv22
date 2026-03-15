@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, ArrowUpRight, ArrowDownLeft, CircleAlert, CheckCircle2, AlertCircle, Plus, X, Download } from 'lucide-react';
+import { Search, ArrowUpRight, ArrowDownLeft, CircleAlert, CheckCircle2, AlertCircle, Plus, X, Download, MessageCircle } from 'lucide-react';
 import { format } from 'date-fns';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -107,6 +107,95 @@ export default function Accounts() {
     fetchClients(); // Refresh client list to update balances
   };
 
+  const generateWhatsAppMessage = (type: 'report' | 'reminder') => {
+    if (!selectedClient || !clientData) return null;
+    const client = clients.find(c => c.id === selectedClient);
+    if (!client) return null;
+
+    const sortedMovements = [...movements].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    let sumOfMovements = 0;
+    for (const mov of sortedMovements) {
+      if (mov.type === 'order') sumOfMovements += mov.total_amount;
+      else sumOfMovements -= mov.amount;
+    }
+    const initialBalance = clientData.balance - sumOfMovements;
+    let runningBalance = initialBalance;
+
+    let text = '';
+    
+    if (type === 'reminder') {
+      text += `Hola *${client.name}* 👋\n`;
+      text += `Te escribimos para recordarte que tenés un saldo pendiente de pago de *$${Math.abs(clientData.balance).toLocaleString()}*.\n\n`;
+      text += `Para tu control, te compartimos el detalle de cómo está compuesto:\n\n`;
+    } else {
+      text += `*Reporte de Cuenta Corriente*\n`;
+      text += `👤 *Cliente:* ${client.name}\n`;
+      text += `💰 *Saldo Pendiente:* $${Math.abs(clientData.balance).toLocaleString()}\n\n`;
+      text += `*Detalle de Movimientos:*\n\n`;
+    }
+
+    if (initialBalance !== 0 || initialObservation) {
+      text += `🔸 *Saldo Inicial:* $${initialBalance.toLocaleString()} ${initialObservation ? `(${initialObservation})` : ''}\n`;
+    }
+
+    const recentMovements = sortedMovements.slice(-15);
+    if (sortedMovements.length > 15) {
+      text += `_(Mostrando últimos 15 movimientos...)_\n`;
+      const previousMovements = sortedMovements.slice(0, sortedMovements.length - 15);
+      for (const mov of previousMovements) {
+        const debit = mov.type === 'order' ? mov.total_amount : 0;
+        const credit = mov.type !== 'order' ? mov.amount : 0;
+        runningBalance += debit - credit;
+      }
+    }
+
+    for (const mov of recentMovements) {
+      const isOrder = mov.type === 'order';
+      const date = format(new Date(mov.date), 'dd/MM');
+      
+      let detail = '';
+      if (isOrder) {
+        detail = `Remito ${mov.serial_number ? `#${mov.serial_number}` : ''}`;
+      } else {
+        detail = `Pago (${mov.method})`;
+      }
+
+      const debit = isOrder ? mov.total_amount : 0;
+      const credit = !isOrder ? mov.amount : 0;
+      runningBalance += debit - credit;
+
+      if (isOrder) {
+        text += `🔴 ${date} - ${detail}: +$${debit.toLocaleString()}\n`;
+      } else {
+        text += `🟢 ${date} - ${detail}: -$${credit.toLocaleString()}\n`;
+      }
+    }
+
+    if (recentMovements.length > 0) {
+      text += `\n*Saldo Actual: $${Math.abs(clientData.balance).toLocaleString()}*\n`;
+    }
+
+    if (type === 'reminder') {
+      text += `\nAvisanos cuando puedas realizar el pago o si tenés alguna duda. ¡Gracias!`;
+    }
+
+    return text;
+  };
+
+  const handleWhatsAppShare = (type: 'report' | 'reminder') => {
+    const text = generateWhatsAppMessage(type);
+    if (!text) return;
+    
+    // Copy to clipboard
+    navigator.clipboard.writeText(text).then(() => {
+      alert('Texto copiado al portapapeles. Listo para pegar en WhatsApp.');
+    }).catch(err => {
+      console.error('Failed to copy', err);
+      // Fallback: open whatsapp link
+      window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
+    });
+  };
+
   const generateReport = () => {
     if (!selectedClient || !clientData) return;
 
@@ -116,9 +205,9 @@ export default function Accounts() {
     const doc = new jsPDF();
 
     // Background color
-    doc.setFillColor(39, 39, 42); // zinc-800
+    doc.setFillColor(255, 255, 255); // White
     doc.rect(0, 0, 210, 297, 'F');
-    doc.setTextColor(255, 255, 255); // White text
+    doc.setTextColor(0, 0, 0); // Black text
 
     // Header
     doc.setFontSize(20);
@@ -196,9 +285,10 @@ export default function Accounts() {
       head: [['Fecha', 'Detalle', 'Debe', 'Haber', 'Saldo']],
       body: tableData,
       theme: 'grid',
-      headStyles: { fillColor: [20, 20, 20], textColor: [255, 255, 255] },
-      bodyStyles: { textColor: [0, 0, 0] },
-      styles: { fontSize: 9, cellPadding: 3 },
+      headStyles: { fillColor: [40, 40, 40], textColor: [255, 255, 255] },
+      bodyStyles: { textColor: [40, 40, 40] },
+      alternateRowStyles: { fillColor: [245, 245, 245] },
+      styles: { fontSize: 9, cellPadding: 3, lineColor: [200, 200, 200], lineWidth: 0.1 },
       columnStyles: {
         1: { cellWidth: 80 } // Give more width to detail column
       }
@@ -212,18 +302,32 @@ export default function Accounts() {
       <div className="flex justify-between items-center">
         <h2 className="text-2xl font-bold tracking-tight">Cuenta Corriente</h2>
         {selectedClient && (
-          <div className="flex gap-3">
+          <div className="flex gap-2">
+            <button
+              onClick={() => handleWhatsAppShare('reminder')}
+              className="bg-emerald-600/20 text-emerald-500 px-3 py-2 rounded-lg text-xs font-bold tracking-wider uppercase flex items-center gap-1 hover:bg-emerald-600/30 transition-colors"
+              title="Copiar Recordatorio de Pago para WhatsApp"
+            >
+              <MessageCircle className="w-4 h-4" /> Cobrar
+            </button>
+            <button
+              onClick={() => handleWhatsAppShare('report')}
+              className="bg-zinc-800 text-white px-3 py-2 rounded-lg text-xs font-bold tracking-wider uppercase flex items-center gap-1 hover:bg-zinc-700 transition-colors"
+              title="Copiar Reporte para WhatsApp"
+            >
+              <MessageCircle className="w-4 h-4" /> Reporte WA
+            </button>
             <button
               onClick={generateReport}
-              className="bg-zinc-800 text-white px-4 py-2 rounded-lg text-sm font-bold tracking-wider uppercase flex items-center gap-2 hover:bg-zinc-700 transition-colors"
+              className="bg-zinc-800 text-white px-3 py-2 rounded-lg text-xs font-bold tracking-wider uppercase flex items-center gap-1 hover:bg-zinc-700 transition-colors"
             >
-              <Download className="w-4 h-4" /> Reporte
+              <Download className="w-4 h-4" /> PDF
             </button>
             <button
               onClick={() => handleOpenPaymentModal(null, clientData?.balance || 0)}
-              className="bg-white text-black px-4 py-2 rounded-lg text-sm font-bold tracking-wider uppercase flex items-center gap-2 hover:bg-zinc-200 transition-colors"
+              className="bg-white text-black px-3 py-2 rounded-lg text-xs font-bold tracking-wider uppercase flex items-center gap-1 hover:bg-zinc-200 transition-colors"
             >
-              <Plus className="w-4 h-4" /> Registrar Pago
+              <Plus className="w-4 h-4" /> Pago
             </button>
           </div>
         )}
