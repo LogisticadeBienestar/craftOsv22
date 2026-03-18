@@ -4,6 +4,8 @@ import autoTable from 'jspdf-autotable';
 import { Search, FileText, Trash2, LayoutDashboard, Truck, Droplets, Car, DollarSign, Briefcase, CheckSquare, X, Printer, Receipt } from 'lucide-react';
 import { format } from 'date-fns';
 import toast from 'react-hot-toast';
+import { getRoundImageBase64 } from '../utils/logo';
+import { logoBase64 } from '../utils/logoData';
 
 export default function Audits() {
   const [activeTab, setActiveTab] = useState<'deliveries' | 'washing' | 'vehicle' | 'advances' | 'tasks' | 'settlements' | 'expenses'>('deliveries');
@@ -108,6 +110,9 @@ export default function Audits() {
     try {
       const doc = new jsPDF();
       doc.setFontSize(20);
+      
+      const roundLogoData = await getRoundImageBase64(logoBase64);
+      doc.addImage(roundLogoData, 'PNG', 14, 14, 16, 16);
 
       let parsedDetails: any = null;
       let summaryText = settlement.details;
@@ -117,10 +122,10 @@ export default function Audits() {
       } catch (e) { }
 
       if (settlement.type === 'vehicle') {
-        doc.text('Liquidación de Uso de Vehículo', 14, 22);
+        doc.text('Liquidación de Uso de Vehículo', 34, 22);
         doc.setFontSize(12);
-        doc.text(`Beneficiario: ${getUserName(settlement.user_id)}`, 14, 32);
-        doc.text(`Fecha de Emisión: ${formatDate(settlement.date)}`, 14, 40);
+        doc.text(`Beneficiario: ${getUserName(settlement.user_id)}`, 34, 32);
+        doc.text(`Fecha de Emisión: ${formatDate(settlement.date)}`, 34, 40);
 
         doc.setFontSize(10);
         const splitDetails = doc.splitTextToSize(`Detalles: ${summaryText}`, 180);
@@ -141,10 +146,10 @@ export default function Audits() {
 
         doc.save(`Liquidacion_Vehiculo_${settlement.date.replace(/-/g, '')}.pdf`);
       } else {
-        doc.text('Liquidación de Lavado de Envases', 14, 22);
+        doc.text('Liquidación de Lavado de Envases', 34, 22);
         doc.setFontSize(12);
-        doc.text(`Beneficiario: ${getUserName(settlement.user_id)}`, 14, 32);
-        doc.text(`Fecha de Emisión: ${formatDate(settlement.date)}`, 14, 40);
+        doc.text(`Beneficiario: ${getUserName(settlement.user_id)}`, 34, 32);
+        doc.text(`Fecha de Emisión: ${formatDate(settlement.date)}`, 34, 40);
 
         doc.setFontSize(10);
         const splitDetails = doc.splitTextToSize(`Detalles: ${summaryText}`, 180);

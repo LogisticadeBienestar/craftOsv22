@@ -4,6 +4,8 @@ import { CheckSquare, Droplets, Car, DollarSign, Calendar } from 'lucide-react';
 import toast from 'react-hot-toast';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { getRoundImageBase64 } from '../utils/logo';
+import { logoBase64 } from '../utils/logoData';
 
 export default function Settlements() {
   const [activeTab, setActiveTab] = useState<'vehicle' | 'washing'>('vehicle');
@@ -103,17 +105,20 @@ export default function Settlements() {
 
   const washingTotal = pendingWashingRecords.reduce((sum, record) => sum + calculateWashingTotal(record), 0);
 
-  const generateVehiclePDF = (tableData: any[]) => {
+  const generateVehiclePDF = async (tableData: any[]) => {
     const doc = new jsPDF();
 
+    const roundLogoData = await getRoundImageBase64(logoBase64);
+    doc.addImage(roundLogoData, 'PNG', 14, 14, 16, 16);
+
     doc.setFontSize(20);
-    doc.text('Liquidación de Uso de Vehículo', 14, 22);
+    doc.text('Liquidación de Uso de Vehículo', 34, 22);
 
     doc.setFontSize(12);
-    doc.text(`Beneficiario: Charly`, 14, 32);
-    doc.text(`Fecha de Emisión: ${format(new Date(), 'dd/MM/yyyy')}`, 14, 40);
-    doc.text(`Periodo: ${pendingVehicleRecords.length > 0 ? format(new Date(pendingVehicleRecords[pendingVehicleRecords.length - 1].date + 'T12:00:00'), 'dd/MM/yyyy') : '-'} al ${pendingVehicleRecords.length > 0 ? format(new Date(pendingVehicleRecords[0].date + 'T12:00:00'), 'dd/MM/yyyy') : '-'}`, 14, 48);
-    doc.text(`Tasa de Cambio: $${exchangeRate} ARS`, 14, 56);
+    doc.text(`Beneficiario: Charly`, 34, 32);
+    doc.text(`Fecha de Emisión: ${format(new Date(), 'dd/MM/yyyy')}`, 34, 40);
+    doc.text(`Periodo: ${pendingVehicleRecords.length > 0 ? format(new Date(pendingVehicleRecords[pendingVehicleRecords.length - 1].date + 'T12:00:00'), 'dd/MM/yyyy') : '-'} al ${pendingVehicleRecords.length > 0 ? format(new Date(pendingVehicleRecords[0].date + 'T12:00:00'), 'dd/MM/yyyy') : '-'}`, 34, 48);
+    doc.text(`Tasa de Cambio: $${exchangeRate} ARS`, 34, 56);
 
     autoTable(doc, {
       startY: 64,
@@ -126,16 +131,19 @@ export default function Settlements() {
     doc.save(`Liquidacion_Vehiculo_${format(new Date(), 'yyyyMMdd')}.pdf`);
   };
 
-  const generateWashingPDF = (tableData: any[]) => {
+  const generateWashingPDF = async (tableData: any[]) => {
     const doc = new jsPDF();
 
+    const roundLogoData = await getRoundImageBase64(logoBase64);
+    doc.addImage(roundLogoData, 'PNG', 14, 14, 16, 16);
+
     doc.setFontSize(20);
-    doc.text('Liquidación de Lavado de Envases', 14, 22);
+    doc.text('Liquidación de Lavado de Envases', 34, 22);
 
     doc.setFontSize(12);
-    doc.text(`Beneficiario: Belén`, 14, 32);
-    doc.text(`Fecha de Emisión: ${format(new Date(), 'dd/MM/yyyy')}`, 14, 40);
-    doc.text(`Periodo: ${pendingWashingRecords.length > 0 ? format(new Date(pendingWashingRecords[pendingWashingRecords.length - 1].date + 'T12:00:00'), 'dd/MM/yyyy') : '-'} al ${pendingWashingRecords.length > 0 ? format(new Date(pendingWashingRecords[0].date + 'T12:00:00'), 'dd/MM/yyyy') : '-'}`, 14, 48);
+    doc.text(`Beneficiario: Belén`, 34, 32);
+    doc.text(`Fecha de Emisión: ${format(new Date(), 'dd/MM/yyyy')}`, 34, 40);
+    doc.text(`Periodo: ${pendingWashingRecords.length > 0 ? format(new Date(pendingWashingRecords[pendingWashingRecords.length - 1].date + 'T12:00:00'), 'dd/MM/yyyy') : '-'} al ${pendingWashingRecords.length > 0 ? format(new Date(pendingWashingRecords[0].date + 'T12:00:00'), 'dd/MM/yyyy') : '-'}`, 34, 48);
 
     autoTable(doc, {
       startY: 56,
