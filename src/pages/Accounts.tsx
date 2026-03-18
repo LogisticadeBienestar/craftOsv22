@@ -13,7 +13,7 @@ export default function Accounts() {
   const [searchTerm, setSearchTerm] = useState('');
   const [zones, setZones] = useState<any[]>([]);
   const [zoneFilter, setZoneFilter] = useState('');
-  const [sortOrder, setSortOrder] = useState<'desc' | 'asc' | 'none'>('none');
+  const [sortOrder, setSortOrder] = useState<'desc' | 'asc' | 'alpha_asc' | 'alpha_desc'>('alpha_asc');
 
   const fetchZones = () => {
     fetch('/api/zones')
@@ -40,8 +40,12 @@ export default function Accounts() {
       return (b.balance || 0) - (a.balance || 0);
     } else if (sortOrder === 'asc') {
       return (a.balance || 0) - (b.balance || 0);
+    } else if (sortOrder === 'alpha_desc') {
+      return (b.name || '').localeCompare(a.name || '');
+    } else {
+      // Default to alpha_asc
+      return (a.name || '').localeCompare(b.name || '');
     }
-    return 0;
   });
 
   // Payment Modal State
@@ -412,7 +416,8 @@ export default function Accounts() {
                 onChange={(e) => setSortOrder(e.target.value as any)}
                 className="bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-zinc-600 focus:ring-1 focus:ring-zinc-600 flex-1"
               >
-                <option value="none">Orden Alfabético</option>
+                <option value="alpha_asc">Cliente (A-Z)</option>
+                <option value="alpha_desc">Cliente (Z-A)</option>
                 <option value="desc">Mayor a menor deuda</option>
                 <option value="asc">Menor a mayor deuda</option>
               </select>

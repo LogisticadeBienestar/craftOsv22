@@ -53,6 +53,8 @@ export default function Invoices() {
     return product ? product.name : 'Desconocido';
   };
 
+  const [sortOrder, setSortOrder] = useState<string>('date_desc');
+
   const filteredOrders = orders.filter(o => {
     const searchMatch = getClientName(o.client_id).toLowerCase().includes(searchTerm.toLowerCase()) ||
       o.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -63,6 +65,30 @@ export default function Invoices() {
     const zoneMatch = zoneFilter === '' || clientZone === zoneFilter || client?.zone === zoneFilter || (client?.zone_id && zones.find(z => z.id === client.zone_id)?.name === zoneFilter);
 
     return searchMatch && zoneMatch;
+  }).sort((a, b) => {
+    switch (sortOrder) {
+      case 'date_asc':
+        return new Date(a.date).getTime() - new Date(b.date).getTime();
+      case 'alpha_asc':
+        return getClientName(a.client_id).localeCompare(getClientName(b.client_id));
+      case 'alpha_desc':
+        return getClientName(b.client_id).localeCompare(getClientName(a.client_id));
+      case 'amount_desc':
+        return b.total_amount - a.total_amount;
+      case 'amount_asc':
+        return a.total_amount - b.total_amount;
+      case 'status_payment':
+        if (a.payment_status === 'pending' && b.payment_status !== 'pending') return -1;
+        if (a.payment_status !== 'pending' && b.payment_status === 'pending') return 1;
+        return 0;
+      case 'status_delivery':
+        if (a.fulfillment_status === 'pending' && b.fulfillment_status !== 'pending') return -1;
+        if (a.fulfillment_status !== 'pending' && b.fulfillment_status === 'pending') return 1;
+        return 0;
+      case 'date_desc':
+      default:
+        return new Date(b.date).getTime() - new Date(a.date).getTime();
+    }
   });
 
   const handleSelectOrder = (id: string) => {
@@ -393,13 +419,14 @@ export default function Invoices() {
     }
 
     if (order.container_quantity > 0) {
-      tableData.push(['ENVASES', order.container_quantity.toString(), '', `$${order.container_total?.toLocaleString() || '0'}`]);
+      const containerUnitPrice = order.container_quantity > 0 ? (order.container_total / order.container_quantity) : 0;
+      tableData.push(['ENVASES', order.container_quantity.toString(), `$${containerUnitPrice.toLocaleString()}`, `$${order.container_total?.toLocaleString() || '0'}`]);
     }
 
     if (order.containers_returned > 0) {
       const containerPrice = parseFloat(settings.container_price) || 0;
       const returnedValue = order.containers_returned * containerPrice;
-      tableData.push(['ENVASES DEVUELTOS', order.containers_returned.toString(), '', `-$${returnedValue.toLocaleString()}`]);
+      tableData.push(['ENVASES DEVUELTOS', order.containers_returned.toString(), `$${containerPrice.toLocaleString()}`, `-$${returnedValue.toLocaleString()}`]);
     }
 
     if (order.has_commissioner) {
@@ -719,7 +746,7 @@ export default function Invoices() {
       </div>
 
       <div className="bg-zinc-950 border border-zinc-800 rounded-2xl overflow-hidden">
-        <div className="p-4 border-b border-zinc-800 flex gap-4 items-center flex-col sm:flex-row">
+        <div className="p-4 border-b border-zinc-800 flex gap-4 items-center flex-col md:flex-row">
           <div className="relative flex-1 max-w-md w-full">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
             <input
@@ -730,16 +757,32 @@ export default function Invoices() {
               className="w-full bg-zinc-900 border border-zinc-800 rounded-lg pl-10 pr-4 py-2 text-sm text-white focus:outline-none focus:border-zinc-600 focus:ring-1 focus:ring-zinc-600"
             />
           </div>
-          <select
-            value={zoneFilter}
-            onChange={(e) => setZoneFilter(e.target.value)}
-            className="bg-zinc-900 border border-zinc-800 rounded-lg px-4 py-2 text-sm text-white focus:outline-none focus:border-zinc-600 focus:ring-1 focus:ring-zinc-600 w-full sm:w-auto"
-          >
-            <option value="">Todas las zonas</option>
-            {[...new Set(zones.map(z => z.name))].sort().map((zoneName: any) => (
-              <option key={zoneName} value={zoneName}>{zoneName}</option>
-            ))}
-          </select>
+          <div className="flex gap-2 w-full md:w-auto overflow-x-auto">
+            <select
+              value={zoneFilter}
+              onChange={(e) => setZoneFilter(e.target.value)}
+              className="bg-zinc-900 border border-zinc-800 rounded-lg px-4 py-2 text-sm text-white focus:outline-none focus:border-zinc-600 focus:ring-1 focus:ring-zinc-600 shrink-0"
+            >
+              <option value="">Todas las zonas</option>
+              {[...new Set(zones.map(z => z.name))].sort().map((zoneName: any) => (
+                <option key={zoneName} value={zoneName}>{zoneName}</option>
+              ))}
+            </select>
+            <select
+              value={sortOrder}
+              onChange={(e) => setSortOrder(e.target.value)}
+              className="bg-zinc-900 border border-zinc-800 rounded-lg px-4 py-2 text-sm text-white focus:outline-none focus:border-zinc-600 focus:ring-1 focus:ring-zinc-600 shrink-0"
+            >
+              <option value="date_desc">Más recientes</option>
+              <option value="date_asc">Más antiguos</option>
+              <option value="alpha_asc">Cliente (A-Z)</option>
+              <option value="alpha_desc">Cliente (Z-A)</option>
+              <option value="amount_desc">Monto (Mayor a menor)</option>
+              <option value="amount_asc">Monto (Menor a mayor)</option>
+              <option value="status_delivery">Pendientes de entrega</option>
+              <option value="status_payment">Pendientes de pago</option>
+            </select>
+          </div>
         </div>
 
         <div className="overflow-x-auto">
