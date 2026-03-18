@@ -3,6 +3,8 @@ import { Search, ArrowUpRight, ArrowDownLeft, CircleAlert, CheckCircle2, AlertCi
 import { format } from 'date-fns';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { getRoundImageBase64 } from '../utils/logo';
+import { logoBase64 } from '../utils/logoData';
 
 export default function Accounts() {
   const [clients, setClients] = useState<any[]>([]);
@@ -196,7 +198,7 @@ export default function Accounts() {
     });
   };
 
-  const generateReport = () => {
+  const generateReport = async () => {
     if (!selectedClient || !clientData) return;
 
     const client = clients.find(c => c.id === selectedClient);
@@ -210,16 +212,19 @@ export default function Accounts() {
     doc.setTextColor(0, 0, 0); // Black text
 
     // Header
+    const roundLogoData = await getRoundImageBase64(logoBase64);
+    doc.addImage(roundLogoData, 'PNG', 14, 14, 16, 16);
+
     doc.setFontSize(20);
-    doc.text('Reporte de Cuenta Corriente', 14, 22);
+    doc.text('Reporte de Cuenta Corriente', 34, 22);
 
     doc.setFontSize(12);
-    doc.text(`Cliente: ${client.name}`, 14, 32);
-    doc.text(`Fecha: ${format(new Date(), 'dd/MM/yyyy HH:mm')}`, 14, 38);
+    doc.text(`Cliente: ${client.name}`, 34, 32);
+    doc.text(`Fecha: ${format(new Date(), 'dd/MM/yyyy HH:mm')}`, 34, 38);
 
     const balanceText = `Saldo pendiente de pago: $${Math.abs(clientData.balance).toLocaleString()}`;
     doc.setFont(undefined, 'bold');
-    doc.text(balanceText, 14, 46);
+    doc.text(balanceText, 34, 46);
     doc.setFont(undefined, 'normal');
 
     // Table data

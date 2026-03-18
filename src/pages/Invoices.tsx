@@ -5,6 +5,8 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { ConfirmModal } from '../components/ConfirmModal';
 import { AlertModal } from '../components/AlertModal';
+import { getRoundImageBase64 } from '../utils/logo';
+import { logoBase64 } from '../utils/logoData';
 
 export default function Invoices() {
   const [orders, setOrders] = useState<any[]>([]);
@@ -252,11 +254,14 @@ export default function Invoices() {
     const totalPaid = payments.reduce((sum: number, p: any) => sum + p.amount, 0);
 
     // Header
+    const roundLogoData = await getRoundImageBase64(logoBase64);
+    doc.addImage(roundLogoData, 'PNG', 14, 14, 16, 16);
+
     doc.setFontSize(20);
-    doc.text('Craft Yogurt - Yogurteria Artesanal', 14, 22);
+    doc.text('Craft Yogurt - Yogurteria Artesanal', 34, 22);
 
     doc.setFontSize(10);
-    doc.text('www.craftyogurt.com.ar', 14, 30);
+    doc.text('www.craftyogurt.com.ar', 34, 30);
     doc.text('Craft Yogurt', 14, 36);
     doc.text('Las Violetas SN', 14, 42);
     doc.text('Los Cocos, Córdoba 5182', 14, 48);
