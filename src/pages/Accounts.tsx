@@ -249,7 +249,7 @@ export default function Accounts() {
     });
   };
 
-  const generateReport = () => {
+  const generateReport = async () => {
     if (!selectedClient || !clientData) return;
 
     const client = clients.find(c => c.id === selectedClient);
@@ -261,6 +261,20 @@ export default function Accounts() {
     doc.setFillColor(255, 255, 255); // White
     doc.rect(0, 0, 210, 297, 'F');
     doc.setTextColor(0, 0, 0); // Black text
+
+    try {
+      const img = new Image();
+      img.crossOrigin = "Anonymous";
+      img.src = "https://res.cloudinary.com/djmpnvt63/image/upload/v1773410896/Logos_Craft_YOGURT_dopntu.png";
+      await new Promise((resolve, reject) => {
+        img.onload = resolve;
+        img.onerror = reject;
+      });
+      // Add logo at top right
+      doc.addImage(img, 'PNG', 160, 10, 36, 18);
+    } catch (e) {
+      console.warn("Could not load logo", e);
+    }
 
     // Header
     doc.setFontSize(20);

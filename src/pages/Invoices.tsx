@@ -107,10 +107,23 @@ export default function Invoices() {
     }
   };
 
-  const generateRouteSheetPDF = () => {
+  const generateRouteSheetPDF = async () => {
     if (selectedOrders.length === 0) return;
 
     const doc = new jsPDF();
+
+    try {
+      const img = new Image();
+      img.crossOrigin = "Anonymous";
+      img.src = "https://res.cloudinary.com/djmpnvt63/image/upload/v1773410896/Logos_Craft_YOGURT_dopntu.png";
+      await new Promise((resolve, reject) => {
+        img.onload = resolve;
+        img.onerror = reject;
+      });
+      doc.addImage(img, 'PNG', 160, 10, 36, 18);
+    } catch (e) {
+      console.warn("Could not load logo", e);
+    }
     
     // Header
     doc.setFontSize(18);
@@ -368,6 +381,19 @@ export default function Invoices() {
     const orderItems = await itemsRes.json();
     const payments = await paymentsRes.json();
     const totalPaid = payments.reduce((sum: number, p: any) => sum + p.amount, 0);
+
+    try {
+      const img = new Image();
+      img.crossOrigin = "Anonymous";
+      img.src = "https://res.cloudinary.com/djmpnvt63/image/upload/v1773410896/Logos_Craft_YOGURT_dopntu.png";
+      await new Promise((resolve, reject) => {
+        img.onload = resolve;
+        img.onerror = reject;
+      });
+      doc.addImage(img, 'PNG', 160, 10, 36, 18);
+    } catch (e) {
+      console.warn("Could not load logo", e);
+    }
 
     // Header
     doc.setFontSize(20);
