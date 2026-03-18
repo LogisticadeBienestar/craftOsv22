@@ -134,8 +134,13 @@ export default function Accounts() {
       text += `*Detalle de Movimientos:*\n\n`;
     }
 
-    if (type !== 'reminder' && (initialBalance !== 0 || initialObservation)) {
-      text += `🔸 *Saldo Inicial:* $${initialBalance.toLocaleString()} ${initialObservation ? `(${initialObservation})` : ''}\n`;
+    if (initialBalance !== 0 || initialObservation) {
+      text += `🔸 *Saldo Inicial:* $${initialBalance.toLocaleString()}\n`;
+      if (initialObservation) {
+        text += `${initialObservation}\n\n`;
+      } else {
+        text += `\n`;
+      }
     }
 
     const recentMovements = sortedMovements.slice(-15);
