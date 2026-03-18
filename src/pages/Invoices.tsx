@@ -370,7 +370,8 @@ export default function Invoices() {
     doc.setFont('helvetica', 'normal');
     doc.text('¡Gracias por su pedido!', 105, finalY + 40, { align: 'center' });
 
-    doc.save(`Remito_${order.serial_number || order.id}.pdf`);
+    const safeClientName = client ? `${client.name.replace(/[^a-zA-Z0-9]/g, '_').replace(/_+/g, '_')}_` : '';
+    doc.save(`Remito_${safeClientName}${order.serial_number || order.id}.pdf`);
   };
 
   if (isGenerating) {
