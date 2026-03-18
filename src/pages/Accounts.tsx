@@ -11,12 +11,38 @@ export default function Accounts() {
   const [initialObservation, setInitialObservation] = useState<string | null>(null);
   const [movements, setMovements] = useState<any[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
+  const [zones, setZones] = useState<any[]>([]);
+  const [zoneFilter, setZoneFilter] = useState('');
+  const [sortOrder, setSortOrder] = useState<'desc' | 'asc' | 'none'>('none');
 
-  const filteredClients = clients.filter(c =>
-    c.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (c.email && c.email.toLowerCase().includes(searchTerm.toLowerCase())) ||
-    (c.notes && c.notes.toLowerCase().includes(searchTerm.toLowerCase()))
-  );
+  const fetchZones = () => {
+    fetch('/api/zones')
+      .then(res => res.json())
+      .then(data => setZones(data));
+  };
+
+  useEffect(() => {
+    fetchZones();
+  }, []);
+
+  const uniqueZones = [...new Set(clients.map(c => c.zone).filter(Boolean))].sort();
+
+  const filteredClients = clients.filter(c => {
+    const matchesSearch = c.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (c.email && c.email.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      (c.notes && c.notes.toLowerCase().includes(searchTerm.toLowerCase()));
+    
+    const matchesZone = zoneFilter === '' || c.zone === zoneFilter;
+
+    return matchesSearch && matchesZone;
+  }).sort((a, b) => {
+    if (sortOrder === 'desc') {
+      return (b.balance || 0) - (a.balance || 0);
+    } else if (sortOrder === 'asc') {
+      return (a.balance || 0) - (b.balance || 0);
+    }
+    return 0;
+  });
 
   // Payment Modal State
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
@@ -367,8 +393,29 @@ export default function Accounts() {
                 placeholder="Buscar cliente..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full bg-zinc-900 border border-zinc-800 rounded-lg pl-10 pr-4 py-2 text-sm text-white focus:outline-none focus:border-zinc-600 focus:ring-1 focus:ring-zinc-600"
+                className="w-full bg-zinc-900 border border-zinc-800 rounded-lg pl-10 pr-4 py-2 text-sm text-white focus:outline-none focus:border-zinc-600 focus:ring-1 focus:ring-zinc-600 mb-3"
               />
+            </div>
+            <div className="flex gap-2">
+              <select
+                value={zoneFilter}
+                onChange={(e) => setZoneFilter(e.target.value)}
+                className="bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-zinc-600 focus:ring-1 focus:ring-zinc-600 flex-1"
+              >
+                <option value="">Todas las zonas</option>
+                {uniqueZones.map((zone: any) => (
+                  <option key={zone} value={zone}>{zone}</option>
+                ))}
+              </select>
+              <select
+                value={sortOrder}
+                onChange={(e) => setSortOrder(e.target.value as any)}
+                className="bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-zinc-600 focus:ring-1 focus:ring-zinc-600 flex-1"
+              >
+                <option value="none">Orden Alfabético</option>
+                <option value="desc">Mayor a menor deuda</option>
+                <option value="asc">Menor a mayor deuda</option>
+              </select>
             </div>
           </div>
           <div className="flex-1 overflow-y-auto">

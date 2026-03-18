@@ -13,10 +13,12 @@ export default function Invoices() {
   const [zones, setZones] = useState<any[]>([]);
   const [settings, setSettings] = useState<any>({});
   const [searchTerm, setSearchTerm] = useState('');
+  const [zoneFilter, setZoneFilter] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [successOrder, setSuccessOrder] = useState<any | null>(null);
   const [editingOrderId, setEditingOrderId] = useState<string | null>(null);
+  const [selectedOrders, setSelectedOrders] = useState<string[]>([]);
 
   const [isConfirmOpen, setIsConfirmOpen] = useState(false);
   const [orderToDelete, setOrderToDelete] = useState<string | null>(null);
@@ -51,11 +53,101 @@ export default function Invoices() {
     return product ? product.name : 'Desconocido';
   };
 
-  const filteredOrders = orders.filter(o =>
-    getClientName(o.client_id).toLowerCase().includes(searchTerm.toLowerCase()) ||
-    o.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (o.serial_number && o.serial_number.toLowerCase().includes(searchTerm.toLowerCase()))
-  );
+  const filteredOrders = orders.filter(o => {
+    const searchMatch = getClientName(o.client_id).toLowerCase().includes(searchTerm.toLowerCase()) ||
+      o.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (o.serial_number && o.serial_number.toLowerCase().includes(searchTerm.toLowerCase()));
+      
+    const client = clients.find(c => c.id === o.client_id);
+    const clientZone = client?.zone_id || client?.zone || '';
+    const zoneMatch = zoneFilter === '' || clientZone === zoneFilter || client?.zone === zoneFilter || (client?.zone_id && zones.find(z => z.id === client.zone_id)?.name === zoneFilter);
+
+    return searchMatch && zoneMatch;
+  });
+
+  const handleSelectOrder = (id: string) => {
+    if (selectedOrders.includes(id)) {
+      setSelectedOrders(selectedOrders.filter(orderId => orderId !== id));
+    } else {
+      setSelectedOrders([...selectedOrders, id]);
+    }
+  };
+
+  const handleSelectAllOrders = () => {
+    if (selectedOrders.length === filteredOrders.length) {
+      setSelectedOrders([]);
+    } else {
+      setSelectedOrders(filteredOrders.map(o => o.id)); // Note: this loses custom ordering
+    }
+  };
+
+  const generateRouteSheetPDF = () => {
+    if (selectedOrders.length === 0) return;
+
+    const doc = new jsPDF();
+    
+    // Header
+    doc.setFontSize(18);
+    doc.text('Hoja de Ruta / Reparto', 14, 20);
+    
+    doc.setFontSize(10);
+    doc.text(`Fecha de Emisión: ${format(new Date(), 'dd/MM/yyyy HH:mm')}`, 14, 28);
+    
+    // Sort selected orders based on the exact order they were clicked (array order)
+    const ordersToReport = selectedOrders.map(id => orders.find(o => o.id === id)).filter(Boolean);
+
+    const tableData: any[] = [];
+    let totalCobrar = 0;
+
+    ordersToReport.forEach((order, index) => {
+      const client = clients.find(c => c.id === order.client_id);
+      
+      const nombre = client?.name || 'Desconocido';
+      const domicilio = client?.address || 'Sin domicilio';
+      // We calculate deuda anterior: current balance minus this order's total
+      // NOTE: This assumes payment hasn't been made. A simplified approach:
+      const deudaAnterior = client ? client.balance - order.total_amount : 0;
+      const montoRemito = order.total_amount || 0;
+      const envasesLlevar = order.container_quantity || 0;
+      
+      totalCobrar += montoRemito;
+
+      tableData.push([
+        (index + 1).toString(),
+        `${nombre}\n${domicilio}`,
+        `$${Math.max(0, deudaAnterior).toLocaleString()}`,
+        `$${montoRemito.toLocaleString()}`,
+        envasesLlevar > 0 ? envasesLlevar.toString() : '-',
+        '' // Espacio vacío para que el chofer anote envases que retira u observaciones
+      ]);
+    });
+
+    autoTable(doc, {
+      startY: 35,
+      head: [['#', 'Cliente y Domicilio', 'Deuda Ant.', 'Monto Remito', 'Envases', 'Retira / Observ.']],
+      body: tableData,
+      theme: 'grid',
+      styles: { fontSize: 9, cellPadding: 3 },
+      headStyles: { fillColor: [40, 40, 40], textColor: [255, 255, 255] },
+      columnStyles: {
+        0: { cellWidth: 10 },
+        1: { cellWidth: 60 },
+        5: { cellWidth: 35 } // Ancho para escribir
+      }
+    });
+
+    const finalY = (doc as any).lastAutoTable.finalY || 40;
+    
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(12);
+    doc.text(`Total a Cobrar de Remitos: $${totalCobrar.toLocaleString()}`, 14, finalY + 10);
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'normal');
+    doc.text('Firma del Repartidor: _________________________', 14, finalY + 25);
+
+    doc.save(`Hoja_de_Ruta_${format(new Date(), 'yyyy-MM-dd')}.pdf`);
+    setSelectedOrders([]); // Clear selection after generating
+  };
 
   const handleAddItem = () => {
     setItems([...items, { product_id: '', quantity: 1, price: 0 }]);
@@ -601,24 +693,34 @@ export default function Invoices() {
       />
       <div className="flex justify-between items-center">
         <h2 className="text-2xl font-bold tracking-tight">Remitos y Facturas</h2>
-        <button
-          onClick={() => {
-            setIsGenerating(true);
-            setEditingOrderId(null);
-            setSelectedClient('');
-            setItems([]);
-            setHasIva(true);
-            setHasCommissioner(true);
-          }}
-          className="bg-white text-black px-4 py-2 rounded-lg text-sm font-bold tracking-wider uppercase flex items-center gap-2 hover:bg-zinc-200 transition-colors"
-        >
-          <FileText className="w-4 h-4" /> Generar Remito
-        </button>
+        <div className="flex gap-2">
+          {selectedOrders.length > 0 && (
+            <button
+              onClick={generateRouteSheetPDF}
+              className="bg-emerald-600/20 text-emerald-500 px-4 py-2 rounded-lg text-sm font-bold tracking-wider uppercase flex items-center gap-2 hover:bg-emerald-600/30 transition-colors"
+            >
+              <Download className="w-4 h-4" /> Generar Hoja de Ruta ({selectedOrders.length})
+            </button>
+          )}
+          <button
+            onClick={() => {
+              setIsGenerating(true);
+              setEditingOrderId(null);
+              setSelectedClient('');
+              setItems([]);
+              setHasIva(true);
+              setHasCommissioner(true);
+            }}
+            className="bg-white text-black px-4 py-2 rounded-lg text-sm font-bold tracking-wider uppercase flex items-center gap-2 hover:bg-zinc-200 transition-colors"
+          >
+            <FileText className="w-4 h-4" /> Generar Remito
+          </button>
+        </div>
       </div>
 
       <div className="bg-zinc-950 border border-zinc-800 rounded-2xl overflow-hidden">
-        <div className="p-4 border-b border-zinc-800 flex gap-4 items-center">
-          <div className="relative flex-1 max-w-md">
+        <div className="p-4 border-b border-zinc-800 flex gap-4 items-center flex-col sm:flex-row">
+          <div className="relative flex-1 max-w-md w-full">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
             <input
               type="text"
@@ -628,12 +730,31 @@ export default function Invoices() {
               className="w-full bg-zinc-900 border border-zinc-800 rounded-lg pl-10 pr-4 py-2 text-sm text-white focus:outline-none focus:border-zinc-600 focus:ring-1 focus:ring-zinc-600"
             />
           </div>
+          <select
+            value={zoneFilter}
+            onChange={(e) => setZoneFilter(e.target.value)}
+            className="bg-zinc-900 border border-zinc-800 rounded-lg px-4 py-2 text-sm text-white focus:outline-none focus:border-zinc-600 focus:ring-1 focus:ring-zinc-600 w-full sm:w-auto"
+          >
+            <option value="">Todas las zonas</option>
+            {[...new Set(zones.map(z => z.name))].sort().map((zoneName: any) => (
+              <option key={zoneName} value={zoneName}>{zoneName}</option>
+            ))}
+          </select>
         </div>
 
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm">
             <thead className="bg-zinc-900/50 text-xs font-bold text-zinc-500 uppercase tracking-wider">
               <tr>
+                <th className="px-6 py-4 font-medium w-10 text-center">
+                  <button onClick={handleSelectAllOrders} className="text-zinc-500 hover:text-white">
+                    {selectedOrders.length === filteredOrders.length && filteredOrders.length > 0 ? (
+                      <CheckSquare className="w-5 h-5" />
+                    ) : (
+                      <Square className="w-5 h-5" />
+                    )}
+                  </button>
+                </th>
                 <th className="px-6 py-4 font-medium">ID / Nº Serie</th>
                 <th className="px-6 py-4 font-medium">Fecha</th>
                 <th className="px-6 py-4 font-medium">Cliente</th>
@@ -645,8 +766,28 @@ export default function Invoices() {
               </tr>
             </thead>
             <tbody className="divide-y divide-zinc-800">
-              {filteredOrders.map((order) => (
-                <tr key={order.id} className="hover:bg-zinc-900/50 transition-colors">
+              {filteredOrders.map((order) => {
+                const isSelected = selectedOrders.includes(order.id);
+                // Also show a sequential number if selected to see order 
+                const selectedIndex = selectedOrders.indexOf(order.id);
+                
+                return (
+                <tr key={order.id} className={`hover:bg-zinc-900/50 transition-colors cursor-pointer ${isSelected ? 'bg-zinc-900/50' : ''}`} onClick={(e) => {
+                  if ((e.target as HTMLElement).closest('button') || (e.target as HTMLElement).closest('select')) return;
+                  handleSelectOrder(order.id);
+                }}>
+                  <td className="px-6 py-4 flex items-center justify-center relative">
+                    {isSelected ? (
+                      <div className="relative">
+                        <CheckSquare className="w-5 h-5 text-white" />
+                        <span className="absolute -top-2 -right-2 bg-emerald-500 text-white text-[10px] w-4 h-4 flex items-center justify-center rounded-full font-bold">
+                          {selectedIndex + 1}
+                        </span>
+                      </div>
+                    ) : (
+                      <Square className="w-5 h-5 text-zinc-600" />
+                    )}
+                  </td>
                   <td className="px-6 py-4 font-mono text-zinc-400">
                     {order.serial_number || order.id.substring(0, 8)}
                   </td>
@@ -712,7 +853,8 @@ export default function Invoices() {
                     </button>
                   </td>
                 </tr>
-              ))}
+                );
+              })}
               {filteredOrders.length === 0 && (
                 <tr>
                   <td colSpan={8} className="px-6 py-8 text-center text-zinc-500">

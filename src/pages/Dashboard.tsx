@@ -240,6 +240,9 @@ export default function Dashboard() {
 
       {/* Top 10 Products Section */}
       <TopProductsSection />
+
+      {/* Top Deudores (50% de la deuda) */}
+      <TopDebtorsSection />
     </div>
   );
 }
@@ -318,6 +321,76 @@ function TopProductsSection() {
         ) : (
           <div className="w-full h-full flex items-center justify-center">
             <p className="text-zinc-500 text-sm">No hay datos de venta en el periodo seleccionado.</p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function TopDebtorsSection() {
+  const [topDebtors, setTopDebtors] = useState<any[]>([]);
+  const [totalDebt, setTotalDebt] = useState(0);
+
+  useEffect(() => {
+    fetch('/api/clients')
+      .then(res => res.json())
+      .then(clients => {
+        const debtors = clients.filter((c: any) => c.balance > 0).sort((a: any, b: any) => b.balance - a.balance);
+        const total = debtors.reduce((sum: number, c: any) => sum + c.balance, 0);
+        setTotalDebt(total);
+
+        let accumulated = 0;
+        const top50Percent: any[] = [];
+        
+        for (const c of debtors) {
+          const percentage = total > 0 ? ((c.balance / total) * 100).toFixed(1) : 0;
+          top50Percent.push({
+            name: c.name,
+            balance: c.balance,
+            displayBalance: `$${c.balance.toLocaleString()} (${percentage}%)`
+          });
+          accumulated += c.balance;
+          if (accumulated >= total * 0.5 && top50Percent.length > 0) {
+            break;
+          }
+        }
+        setTopDebtors(top50Percent);
+      });
+  }, []);
+
+  const COLORS = ['#ef4444', '#f87171', '#fca5a5', '#fecaca', '#fee2e2'];
+
+  return (
+    <div className="bg-zinc-950 border border-zinc-800 rounded-2xl p-6">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+        <div>
+          <h3 className="text-sm font-bold text-zinc-400 tracking-wider uppercase">Top Deudores (Representan el 50% de la deuda)</h3>
+          <p className="text-xs text-zinc-500 mt-1">Deuda Total Activa: <span className="text-white font-mono">${totalDebt.toLocaleString()}</span></p>
+        </div>
+      </div>
+
+      <div className="h-80">
+        {topDebtors.length > 0 ? (
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={topDebtors} layout="vertical" margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
+              <XAxis type="number" stroke="#52525b" fontSize={12} tickLine={false} axisLine={false} tickFormatter={(value) => `$${value}`} />
+              <YAxis dataKey="name" type="category" stroke="#a1a1aa" fontSize={11} tickLine={false} axisLine={false} width={150} />
+              <Tooltip
+                cursor={{ fill: '#27272a' }}
+                contentStyle={{ backgroundColor: '#18181b', border: '1px solid #27272a', borderRadius: '8px' }}
+                formatter={(value: number, name: string, props: any) => [props.payload.displayBalance, 'Deuda Acumulada']}
+              />
+              <Bar dataKey="balance" radius={[0, 4, 4, 0]} barSize={20}>
+                {topDebtors.map((entry, index) => (
+                  <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                ))}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        ) : (
+          <div className="w-full h-full flex items-center justify-center">
+            <p className="text-zinc-500 text-sm">No hay deudores registrados.</p>
           </div>
         )}
       </div>
