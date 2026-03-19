@@ -14,9 +14,9 @@ export const getRoundImageBase64 = (src: string): Promise<string> => {
       ctx.arc(size / 2, size / 2, size / 2, 0, Math.PI * 2);
       ctx.clip();
 
-      const srcX = (img.width - size) / 2;
-      const srcY = (img.height - size) / 2;
-      ctx.drawImage(img, srcX, srcY, size, size, 0, 0, size, size);
+      // Stretch the entire original image into the square canvas
+      // This forces an oval image to become a perfect circle
+      ctx.drawImage(img, 0, 0, img.width, img.height, 0, 0, size, size);
 
       resolve(canvas.toDataURL('image/png'));
     };
