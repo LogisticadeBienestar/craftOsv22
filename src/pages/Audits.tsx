@@ -95,14 +95,14 @@ function FilterBar({
 }
 
 // Utility to filter records by date range and user
-function applyFilters<T extends { date: string }>(
-  records: T[],
+function applyFilters(
+  records: any[],
   dateFrom: string,
   dateTo: string,
   userIdFilter: string,
-  userKey: keyof T = 'user_id' as keyof T,
+  userKey: string = 'user_id',
   sortDir: 'asc' | 'desc' = 'desc'
-): T[] {
+): any[] {
   let result = [...records];
   if (dateFrom) {
     const from = startOfDay(parseLocalDate(dateFrom));
@@ -139,6 +139,7 @@ export default function Audits() {
   const [tasks, setTasks] = useState<any[]>([]);
   const [settlements, setSettlements] = useState<any[]>([]);
   const [expenses, setExpenses] = useState<any[]>([]);
+  const [expenseCategories, setExpenseCategories] = useState<any[]>([]);
 
   // Delivery summary panel state
   const [deliveryAllPayments, setDeliveryAllPayments] = useState<{ [orderId: string]: any[] }>({});
@@ -179,7 +180,9 @@ export default function Audits() {
   const [expDateFrom, setExpDateFrom] = useState('');
   const [expDateTo, setExpDateTo] = useState('');
   const [expUserId, setExpUserId] = useState('');
+  const [expRubro, setExpRubro] = useState('');
   const [expSortDir, setExpSortDir] = useState<'asc' | 'desc'>('desc');
+  const [showExpSummary, setShowExpSummary] = useState(false);
 
   useEffect(() => {
     fetchData();
@@ -196,6 +199,7 @@ export default function Audits() {
     fetch('/api/advances').then(res => res.json()).then(data => setAdvances(data));
     fetch('/api/settlements').then(res => res.json()).then(data => setSettlements(data));
     fetch('/api/company-expenses').then(res => res.json()).then(data => setExpenses(data));
+    fetch('/api/expense-categories').then(res => res.json()).then(data => setExpenseCategories(data));
   };
 
   const getClientName = (id: string) => clients.find(c => c.id === id)?.name || 'Desconocido';
@@ -307,9 +311,9 @@ export default function Audits() {
     ? applyFilters(auditedOrders, delDateFrom, delDateTo, delUserId, 'delivered_by', delSortDir)
     : [];
   const summaryTotalContainers = summaryOrders.reduce((sum, o) => sum + (o.containers_returned || 0), 0);
-  const summaryPaymentsFlat = Object.values(deliveryAllPayments).flat();
-  const summaryTotalEfectivo = summaryPaymentsFlat.filter(p => p.method === 'EFECTIVO').reduce((s, p) => s + p.amount, 0);
-  const summaryTotalTransferencia = summaryPaymentsFlat.filter(p => p.method === 'TRANSFERENCIA').reduce((s, p) => s + p.amount, 0);
+  const summaryPaymentsFlat = (Object.values(deliveryAllPayments).flat() as any[]);
+  const summaryTotalEfectivo = summaryPaymentsFlat.filter((p: any) => p.method === 'EFECTIVO').reduce((s: number, p: any) => s + p.amount, 0);
+  const summaryTotalTransferencia = summaryPaymentsFlat.filter((p: any) => p.method === 'TRANSFERENCIA').reduce((s: number, p: any) => s + p.amount, 0);
   const summaryTotalCobrado = summaryTotalEfectivo + summaryTotalTransferencia;
 
   // Per-user breakdown for deliveries
@@ -328,7 +332,19 @@ export default function Audits() {
   const filteredAdvances = applyFilters(advances, advDateFrom, advDateTo, advUserId, 'user_id', advSortDir);
   const filteredTasks = applyFilters(tasks, taskDateFrom, taskDateTo, taskUserId, 'user_id', taskSortDir);
   const filteredSettlements = applyFilters(settlements, setlDateFrom, setlDateTo, setlUserId, 'user_id', setlSortDir);
-  const filteredExpenses = applyFilters(expenses, expDateFrom, expDateTo, expUserId, 'user_id', expSortDir);
+  let filteredExpenses = applyFilters(expenses, expDateFrom, expDateTo, expUserId, 'user_id', expSortDir);
+  if (expRubro) filteredExpenses = filteredExpenses.filter(r => (r.rubro || 'General') === expRubro);
+
+  // Expense summary calculations
+  const expSummaryTotal = filteredExpenses.reduce((s, r) => s + r.amount, 0);
+  const expByRubro: Record<string, number> = {};
+  const expByUser: Record<string, number> = {};
+  for (const r of filteredExpenses) {
+    const rb = r.rubro || 'General';
+    expByRubro[rb] = (expByRubro[rb] || 0) + r.amount;
+    const uname = getUserName(r.user_id);
+    expByUser[uname] = (expByUser[uname] || 0) + r.amount;
+  }
 
   const tabs = [
     { key: 'deliveries', label: 'Entregas', icon: <Truck className="w-4 h-4" /> },
@@ -746,13 +762,98 @@ export default function Audits() {
         {/* EXPENSES TAB */}
         {activeTab === 'expenses' && (
           <>
-            <FilterBar
-              dateFrom={expDateFrom} setDateFrom={setExpDateFrom}
-              dateTo={expDateTo} setDateTo={setExpDateTo}
-              userId={expUserId} setUserId={setExpUserId}
-              sortDir={expSortDir} setSortDir={setExpSortDir}
-              users={users}
-            />
+            {/* Filter bar with rubro */}
+            <div className="p-4 border-b border-zinc-800 bg-zinc-900/30 flex flex-wrap gap-3 items-end">
+              <div>
+                <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-wider mb-1">Desde</label>
+                <input type="date" value={expDateFrom} onChange={e => setExpDateFrom(e.target.value)}
+                  className="bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-zinc-600" />
+              </div>
+              <div>
+                <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-wider mb-1">Hasta</label>
+                <input type="date" value={expDateTo} onChange={e => setExpDateTo(e.target.value)}
+                  className="bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-zinc-600" />
+              </div>
+              <div>
+                <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-wider mb-1">Usuario</label>
+                <select value={expUserId} onChange={e => setExpUserId(e.target.value)}
+                  className="bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-zinc-600">
+                  <option value="">Todos</option>
+                  {users.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-wider mb-1">Rubro</label>
+                <select value={expRubro} onChange={e => setExpRubro(e.target.value)}
+                  className="bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-zinc-600">
+                  <option value="">Todos los rubros</option>
+                  {expenseCategories.map((c: any) => <option key={c.id} value={c.name}>{c.name}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-wider mb-1">Orden</label>
+                <select value={expSortDir} onChange={e => setExpSortDir(e.target.value as 'asc' | 'desc')}
+                  className="bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-zinc-600">
+                  <option value="desc">Más recientes</option>
+                  <option value="asc">Más antiguos</option>
+                </select>
+              </div>
+              {(expDateFrom || expDateTo || expUserId || expRubro) && (
+                <button onClick={() => { setExpDateFrom(''); setExpDateTo(''); setExpUserId(''); setExpRubro(''); }}
+                  className="text-xs text-zinc-400 hover:text-white border border-zinc-700 hover:border-zinc-500 rounded-lg px-3 py-2 transition-colors">
+                  Limpiar filtros
+                </button>
+              )}
+            </div>
+
+            {/* Summary trigger */}
+            <div className="px-4 py-3 border-b border-zinc-800 flex items-center gap-3">
+              <button
+                onClick={() => setShowExpSummary(s => !s)}
+                className="flex items-center gap-2 text-sm font-bold text-zinc-400 hover:text-white border border-zinc-700 hover:border-zinc-500 rounded-lg px-4 py-2 transition-colors"
+              >
+                <Filter className="w-4 h-4" />
+                {showExpSummary ? 'Ocultar Resumen' : 'Ver Resumen / Cuadro'}
+              </button>
+              <span className="text-xs text-zinc-500">{filteredExpenses.length} gasto{filteredExpenses.length !== 1 ? 's' : ''} · Total: ${expSummaryTotal.toLocaleString()}</span>
+            </div>
+
+            {/* Summary panel */}
+            {showExpSummary && (
+              <div className="border-b border-zinc-800 bg-zinc-900/50 p-6 space-y-6">
+                <h3 className="text-sm font-bold text-white uppercase tracking-wider">Resumen del Período</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {/* By rubro */}
+                  <div>
+                    <h4 className="text-xs font-bold text-zinc-400 uppercase tracking-wider mb-3">Por Rubro</h4>
+                    <div className="space-y-2">
+                      {Object.entries(expByRubro).sort((a, b) => b[1] - a[1]).map(([rb, total]) => (
+                        <div key={rb} className="flex justify-between items-center bg-zinc-900 rounded-lg px-4 py-2">
+                          <span className="text-sm text-zinc-300">{rb}</span>
+                          <span className="font-bold text-emerald-400">${(total as number).toLocaleString()}</span>
+                        </div>
+                      ))}
+                      <div className="flex justify-between items-center bg-zinc-900 border border-emerald-500/30 rounded-lg px-4 py-2 mt-3">
+                        <span className="text-sm font-bold text-white">Total</span>
+                        <span className="font-bold text-emerald-400 text-lg">${expSummaryTotal.toLocaleString()}</span>
+                      </div>
+                    </div>
+                  </div>
+                  {/* By user */}
+                  <div>
+                    <h4 className="text-xs font-bold text-zinc-400 uppercase tracking-wider mb-3">Por Usuario</h4>
+                    <div className="space-y-2">
+                      {Object.entries(expByUser).sort((a, b) => b[1] - a[1]).map(([name, total]) => (
+                        <div key={name} className="flex justify-between items-center bg-zinc-900 rounded-lg px-4 py-2">
+                          <span className="text-sm text-zinc-300">{name}</span>
+                          <span className="font-bold text-blue-400">${(total as number).toLocaleString()}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
             <div className="overflow-x-auto">
               <table className="w-full text-left text-sm">
                 <thead className="bg-zinc-900/50 text-xs font-bold text-zinc-500 uppercase tracking-wider">

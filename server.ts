@@ -843,7 +843,7 @@ async function startServer() {
       const { data: records, error } = await query;
       if (error) throw error;
 
-      const formatted = records?.map((r: any) => ({ ...r, user_name: r.users?.name })) || [];
+      const formatted = records?.map((r: any) => ({ ...r, user_name: r.users?.name, rubro: r.rubro || 'General' })) || [];
       res.json(formatted);
     } catch (e: any) {
       res.status(500).json({ error: e.message });
@@ -852,13 +852,26 @@ async function startServer() {
 
   app.post('/api/company-expenses', async (req, res) => {
     try {
-      const { id, date, user_id, description, amount } = req.body;
+      const { id, date, user_id, description, amount, rubro } = req.body;
       const expenseId = id || crypto.randomUUID();
       const { error } = await supabase.from('company_expenses').insert({
-        id: expenseId, date, user_id, description, amount
+        id: expenseId, date, user_id, description, amount, rubro: rubro || 'General'
       });
       if (error) throw error;
       res.json({ success: true, id: expenseId });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  // PUT — Admin re-imputation of rubro
+  app.put('/api/company-expenses/:id', async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { rubro } = req.body;
+      const { error } = await supabase.from('company_expenses').update({ rubro }).eq('id', id);
+      if (error) throw error;
+      res.json({ success: true });
     } catch (e: any) {
       res.status(500).json({ success: false, error: e.message });
     }
@@ -868,6 +881,42 @@ async function startServer() {
     try {
       const { id } = req.params;
       const { error } = await supabase.from('company_expenses').delete().eq('id', id);
+      if (error) throw error;
+      res.json({ success: true });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  // Expense Categories (Rubros)
+  app.get('/api/expense-categories', async (req, res) => {
+    try {
+      const { data, error } = await supabase.from('expense_categories').select('*').order('name');
+      if (error) throw error;
+      res.json(data || []);
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.post('/api/expense-categories', async (req, res) => {
+    try {
+      const { name } = req.body;
+      if (!name) return res.status(400).json({ error: 'Name required' });
+      const id = name.toLowerCase().replace(/[^a-z0-9]/g, '_').replace(/_+/g, '_');
+      const { error } = await supabase.from('expense_categories').insert({ id, name });
+      if (error) throw error;
+      res.json({ success: true, id });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  app.delete('/api/expense-categories/:id', async (req, res) => {
+    try {
+      const { id } = req.params;
+      if (id === 'general') return res.status(400).json({ error: 'Cannot delete General category' });
+      const { error } = await supabase.from('expense_categories').delete().eq('id', id);
       if (error) throw error;
       res.json({ success: true });
     } catch (e: any) {
