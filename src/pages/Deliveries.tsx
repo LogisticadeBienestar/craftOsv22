@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react';
-import { Plus } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 export default function Deliveries() {
@@ -54,13 +53,10 @@ export default function Deliveries() {
     const collected = parseFloat(collectedAmount) || 0;
     const containersReturned = parseInt(containers) || 0;
 
-    // Calculate the actual total amount to save in the order
-    // The user wants the container value to be discounted from the order's total
     const containerPrice = parseFloat(settings.container_price) || 0;
     const containerValue = containersReturned * containerPrice;
     const discountedTotal = finalAmount - containerValue;
 
-    // Update Order
     await fetch(`/api/orders/${selectedOrder}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
@@ -70,11 +66,10 @@ export default function Deliveries() {
         containers_returned: containersReturned,
         fulfillment_status: 'delivered',
         delivered_by: currentUser?.id,
-        payment_status: order.payment_status // Keep existing, POST /api/payments will update it if needed
+        payment_status: order.payment_status
       })
     });
 
-    // Create Payment if collected
     if (collected > 0) {
       const paymentData = {
         id: crypto.randomUUID(),
@@ -92,7 +87,6 @@ export default function Deliveries() {
       });
     }
 
-    // Reset form
     setSelectedClient('');
     setSelectedOrder('');
     setRemitoAmount('');
@@ -126,6 +120,8 @@ export default function Deliveries() {
   const aLiquidarTotal = aLiquidarResumen + clientPreviousBalance;
   const saldoFinal = aLiquidarTotal - parsedCollected;
 
+  const sortedClients = [...clients].sort((a, b) => a.name.localeCompare(b.name, 'es'));
+
   return (
     <div className="max-w-4xl mx-auto">
       <h2 className="text-2xl font-bold mb-8 tracking-tight">Registro de Entrega / Cobranza</h2>
@@ -134,16 +130,14 @@ export default function Deliveries() {
         {/* Left Column */}
         <div className="space-y-6">
           <div>
-            <div className="flex justify-between items-center mb-2">
-              <label className="text-xs font-bold text-zinc-500 tracking-wider uppercase">Cliente / Local</label>
-            </div>
+            <label className="block text-xs font-bold text-zinc-500 tracking-wider uppercase mb-2">Cliente / Local</label>
             <select
               value={selectedClient}
               onChange={(e) => handleClientChange(e.target.value)}
               className="w-full bg-zinc-900 border border-zinc-800 rounded-xl p-4 text-white focus:outline-none focus:border-zinc-600 focus:ring-1 focus:ring-zinc-600 appearance-none"
             >
               <option value="" disabled>Seleccionar cliente...</option>
-              {clients.map(c => (
+              {sortedClients.map(c => (
                 <option key={c.id} value={c.id}>{c.name} {c.notes ? `(${c.notes})` : ''}</option>
               ))}
             </select>
@@ -183,7 +177,7 @@ export default function Deliveries() {
               />
             </div>
             <div>
-              <label className="block text-xs font-bold text-zinc-500 tracking-wider uppercase mb-2">Envases Devueltos (Cant.)</label>
+              <label className="block text-xs font-bold text-zinc-500 tracking-wider uppercase mb-2">Envases Devueltos</label>
               <input
                 type="number"
                 value={containers}
@@ -193,28 +187,38 @@ export default function Deliveries() {
             </div>
           </div>
 
-          <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6">
-            <div className="flex justify-between items-center mb-4">
+          {/* Simplified Cobro Summary */}
+          <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 space-y-4">
+            <div className="text-xs font-bold text-zinc-500 tracking-wider uppercase">Resumen de Cobro</div>
+
+            <div className="flex justify-between items-center">
               <div>
-                <div className="text-xs font-bold text-zinc-500 tracking-wider uppercase">Remito Actual</div>
-                <div className="text-[10px] text-zinc-600 uppercase tracking-wider">Neto (Remito - Envases: ${containerValue.toLocaleString()})</div>
+                <div className="text-sm font-medium text-zinc-300">Este remito</div>
+                {parsedContainers > 0 && (
+                  <div className="text-[11px] text-zinc-500">
+                    −{parsedContainers} envase{parsedContainers !== 1 ? 's' : ''} (−${containerValue.toLocaleString()})
+                  </div>
+                )}
               </div>
-              <div className="text-xl font-bold tracking-tighter text-white">
-                ${aLiquidarResumen.toLocaleString()}
-              </div>
+              <div className="text-xl font-bold text-white">${aLiquidarResumen.toLocaleString()}</div>
             </div>
 
-            <div className={`flex justify-between items-center mb-4 pt-4 border-t border-zinc-800`}>
-              <div className={`text-xs font-bold tracking-wider uppercase ${clientPreviousBalance >= 0 ? 'text-red-500/80' : 'text-emerald-500/80'}`}>
-                Saldo Anterior {clientPreviousBalance >= 0 ? '(Deuda)' : '(A Favor)'}
+            {clientPreviousBalance !== 0 && (
+              <div className="flex justify-between items-center pt-3 border-t border-zinc-800">
+                <div>
+                  <div className={`text-sm font-medium ${clientPreviousBalance > 0 ? 'text-red-400' : 'text-emerald-400'}`}>
+                    {clientPreviousBalance > 0 ? 'Deuda previa' : 'Saldo a favor'}
+                  </div>
+                  <div className="text-[11px] text-zinc-500">Cuenta corriente del cliente</div>
+                </div>
+                <div className={`text-xl font-bold ${clientPreviousBalance > 0 ? 'text-red-400' : 'text-emerald-400'}`}>
+                  {clientPreviousBalance > 0 ? '+' : '−'}${Math.abs(clientPreviousBalance).toLocaleString()}
+                </div>
               </div>
-              <div className={`text-xl font-bold tracking-tighter ${clientPreviousBalance >= 0 ? 'text-red-400' : 'text-emerald-400'}`}>
-                {clientPreviousBalance >= 0 ? '+' : '-'} ${Math.abs(clientPreviousBalance).toLocaleString()}
-              </div>
-            </div>
+            )}
 
-            <div className="flex justify-between items-center pt-4 border-t border-zinc-800">
-              <div className="text-sm font-bold text-white tracking-wider uppercase">Total a Pagar</div>
+            <div className="flex justify-between items-center pt-3 border-t border-zinc-700">
+              <div className="text-sm font-bold text-white uppercase tracking-wider">Total a Cobrar</div>
               <div className="text-4xl font-bold tracking-tighter text-emerald-400">
                 ${aLiquidarTotal.toLocaleString()}
               </div>
@@ -234,7 +238,7 @@ export default function Deliveries() {
                   : 'bg-zinc-900 text-zinc-500 border border-zinc-800 hover:border-zinc-700'
                   }`}
               >
-                EFECTIVO
+                💵 EFECTIVO
               </button>
               <button
                 onClick={() => setPaymentMethod('TRANSFERENCIA')}
@@ -243,7 +247,7 @@ export default function Deliveries() {
                   : 'bg-zinc-900 text-zinc-500 border border-zinc-800 hover:border-zinc-700'
                   }`}
               >
-                TRANSFERENCIA
+                💳 TRANSFER.
               </button>
             </div>
           </div>
@@ -268,6 +272,12 @@ export default function Deliveries() {
               {saldoFinal <= 0 && <p className="text-xs text-zinc-500 mt-2 text-center">Cuenta saldada o a favor</p>}
             </div>
           </div>
+
+          {parsedCollected > 0 && (
+            <div className={`rounded-xl p-4 border text-sm font-medium ${paymentMethod === 'EFECTIVO' ? 'bg-amber-500/10 border-amber-500/30 text-amber-400' : 'bg-blue-500/10 border-blue-500/30 text-blue-400'}`}>
+              Se registrará <span className="font-bold">${parsedCollected.toLocaleString()}</span> como <span className="font-bold">{paymentMethod}</span>
+            </div>
+          )}
 
           <div className="pt-4">
             <button

@@ -57,9 +57,31 @@ export default function Products() {
     setEditForm({ name: '', price: 0, sku: '', category: 'Mayorista' });
   };
 
-  const filteredProducts = products.filter(p =>
+  const customSkuOrder = [
+    'YOG-NAT-910',
+    'BEB-NAT-500',
+    'GRI-NAT-200',
+    'GRI-XL-800',
+    'BEB-VAI-500',
+    'BEB-VAI-910',
+    'UNT-NAT-200',
+    'LEC-ENT-910',
+    'MAN-YOG-100',
+    'MAN-YOG-200'
+  ];
+
+  const sortedProducts = [...products].sort((a, b) => {
+    const indexA = customSkuOrder.indexOf(a.sku);
+    const indexB = customSkuOrder.indexOf(b.sku);
+    if (indexA !== -1 && indexB !== -1) return indexA - indexB;
+    if (indexA !== -1) return -1;
+    if (indexB !== -1) return 1;
+    return a.name.localeCompare(b.name);
+  });
+
+  const filteredProducts = sortedProducts.filter(p =>
     p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    p.sku.toLowerCase().includes(searchTerm.toLowerCase())
+    (p.sku && p.sku.toLowerCase().includes(searchTerm.toLowerCase()))
   );
 
   return (

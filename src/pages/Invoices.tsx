@@ -1,6 +1,6 @@
 import { useState, useEffect, type FormEvent } from 'react';
 import { Search, FileText, Download, Plus, X, Trash2, CheckSquare, Square, Edit2 } from 'lucide-react';
-import { format } from 'date-fns';
+import { format, parseISO } from 'date-fns';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { ConfirmModal } from '../components/ConfirmModal';
@@ -29,6 +29,15 @@ export default function Invoices() {
   // Form State
   const [selectedClient, setSelectedClient] = useState('');
   const [date, setDate] = useState(format(new Date(), 'yyyy-MM-dd'));
+
+  // Parse a date string safely in local time (avoids UTC offset issues)
+  const parseLocalDate = (dateStr: string) => {
+    if (!dateStr) return new Date();
+    // If it's an ISO string with time info, use parseISO directly
+    if (dateStr.includes('T')) return parseISO(dateStr);
+    // If it's a plain date string (YYYY-MM-DD), append T12:00:00 to interpret as local noon
+    return new Date(dateStr + 'T12:00:00');
+  };
   const [items, setItems] = useState<{ product_id: string, quantity: number, price: number }[]>([]);
   const [hasIva, setHasIva] = useState(true);
   const [hasCommissioner, setHasCommissioner] = useState(true);
@@ -189,6 +198,29 @@ export default function Invoices() {
     doc.save(`Hoja_de_Ruta_${format(new Date(), 'yyyy-MM-dd')}.pdf`);
     setSelectedOrders([]); // Clear selection after generating
   };
+
+  const sortedClients = [...clients].sort((a, b) => a.name.localeCompare(b.name, 'es'));
+
+  const customSkuOrder = [
+    'YOG-NAT-910',
+    'BEB-NAT-500',
+    'GRI-NAT-200',
+    'GRI-XL-800',
+    'BEB-VAI-500',
+    'BEB-VAI-910',
+    'UNT-NAT-200',
+    'LEC-ENT-910',
+    'MAN-YOG-100',
+    'MAN-YOG-200'
+  ];
+  const sortedProducts = [...products].sort((a, b) => {
+    const indexA = customSkuOrder.indexOf(a.sku);
+    const indexB = customSkuOrder.indexOf(b.sku);
+    if (indexA !== -1 && indexB !== -1) return indexA - indexB;
+    if (indexA !== -1) return -1;
+    if (indexB !== -1) return 1;
+    return a.name.localeCompare(b.name, 'es');
+  });
 
   const handleAddItem = () => {
     setItems([...items, { product_id: '', quantity: 1, price: 0 }]);
@@ -352,7 +384,7 @@ export default function Invoices() {
   const handleEditOrder = async (order: any) => {
     setEditingOrderId(order.id);
     setSelectedClient(order.client_id);
-    setDate(format(new Date(order.date), 'yyyy-MM-dd'));
+    setDate(format(parseLocalDate(order.date), 'yyyy-MM-dd'));
     setHasIva(order.has_iva === 1);
     setHasCommissioner(order.has_commissioner === 1);
 
@@ -419,7 +451,7 @@ export default function Invoices() {
 
     // Order Info
     doc.setFontSize(10);
-    doc.text(format(new Date(order.date), 'MMM dd, yyyy, hh:mm a'), 14, 68);
+    doc.text(format(parseLocalDate(order.date), 'dd/MM/yyyy HH:mm'), 14, 68);
 
     if (client) {
       doc.text(client.name, 14, 76);
@@ -555,7 +587,7 @@ export default function Invoices() {
                 className="w-full bg-zinc-900 border border-zinc-800 rounded-xl p-3 text-white focus:outline-none focus:border-zinc-600 focus:ring-1 focus:ring-zinc-600"
               >
                 <option value="" disabled>Seleccionar cliente...</option>
-                {clients.map(c => (
+                {sortedClients.map(c => (
                   <option key={c.id} value={c.id}>{c.name} {c.notes ? `(${c.notes})` : ''}</option>
                 ))}
               </select>
@@ -595,7 +627,7 @@ export default function Invoices() {
                       className="w-full bg-zinc-900 border border-zinc-800 rounded-xl p-3 text-white focus:outline-none focus:border-zinc-600 focus:ring-1 focus:ring-zinc-600"
                     >
                       <option value="" disabled>Seleccionar producto...</option>
-                      {products.map(p => (
+                      {sortedProducts.map(p => (
                         <option key={p.id} value={p.id}>{p.name}</option>
                       ))}
                     </select>
@@ -865,7 +897,7 @@ export default function Invoices() {
                   <td className="px-6 py-4 font-mono text-zinc-400">
                     {order.serial_number || order.id.substring(0, 8)}
                   </td>
-                  <td className="px-6 py-4 text-zinc-400">{format(new Date(order.date), 'dd/MM/yyyy')}</td>
+                  <td className="px-6 py-4 text-zinc-400">{format(parseLocalDate(order.date), 'dd/MM/yyyy')}</td>
                   <td className="px-6 py-4 font-medium text-white">{getClientName(order.client_id)}</td>
                   <td className="px-6 py-4 text-right font-mono text-white">
                     ${order.total_amount.toLocaleString()}
