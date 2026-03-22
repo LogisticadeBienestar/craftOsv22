@@ -42,6 +42,7 @@ export default function CompanyExpenses() {
   // New category state (admin)
   const [showAddCategory, setShowAddCategory] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState('');
+  const [newCategoryAdminOnly, setNewCategoryAdminOnly] = useState(false);
 
   const fetchData = async () => {
     if (!currentUser) return;
@@ -153,11 +154,12 @@ export default function CompanyExpenses() {
       const res = await fetch('/api/expense-categories', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: newCategoryName.trim() })
+        body: JSON.stringify({ name: newCategoryName.trim(), admin_only: newCategoryAdminOnly })
       });
       if (res.ok) {
         toast.success('Rubro creado');
         setNewCategoryName('');
+        setNewCategoryAdminOnly(false);
         setShowAddCategory(false);
         fetchAllHistory();
       } else throw new Error();
@@ -179,7 +181,9 @@ export default function CompanyExpenses() {
     }
   };
 
-  const categoryNames = categories.map((c: any) => c.name);
+  // Categories visible to current user in the dropdown
+  const visibleCategories = isAdmin ? categories : categories.filter((c: any) => !c.admin_only);
+  const categoryNames = visibleCategories.map((c: any) => c.name);
 
   return (
     <div className="space-y-8 max-w-3xl mx-auto pb-12">
@@ -208,28 +212,41 @@ export default function CompanyExpenses() {
           </div>
 
           {showAddCategory && (
-            <div className="px-6 py-4 border-b border-zinc-800 flex gap-3">
-              <input
-                type="text"
-                value={newCategoryName}
-                onChange={e => setNewCategoryName(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && handleAddCategory()}
-                placeholder="Nombre del rubro..."
-                className="flex-1 bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-zinc-500"
-                autoFocus
-              />
-              <button onClick={handleAddCategory} className="px-4 py-2 bg-white text-black rounded-lg text-sm font-bold hover:bg-zinc-200 transition-colors">
-                Crear
-              </button>
-              <button onClick={() => setShowAddCategory(false)} className="px-3 py-2 text-zinc-500 hover:text-white transition-colors">
-                <X className="w-4 h-4" />
-              </button>
+            <div className="px-6 py-4 border-b border-zinc-800 space-y-3">
+              <div className="flex gap-3">
+                <input
+                  type="text"
+                  value={newCategoryName}
+                  onChange={e => setNewCategoryName(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && handleAddCategory()}
+                  placeholder="Nombre del rubro..."
+                  className="flex-1 bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-zinc-500"
+                  autoFocus
+                />
+                <button onClick={handleAddCategory} className="px-4 py-2 bg-white text-black rounded-lg text-sm font-bold hover:bg-zinc-200 transition-colors">
+                  Crear
+                </button>
+                <button onClick={() => setShowAddCategory(false)} className="px-3 py-2 text-zinc-500 hover:text-white transition-colors">
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+              {/* Admin-only toggle */}
+              <label className="flex items-center gap-2 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={newCategoryAdminOnly}
+                  onChange={e => setNewCategoryAdminOnly(e.target.checked)}
+                  className="w-4 h-4 accent-amber-500"
+                />
+                <span className="text-xs text-zinc-400">Solo visible para el Administrador</span>
+              </label>
             </div>
           )}
 
           <div className="p-4 flex flex-wrap gap-2">
             {categories.map((cat: any) => (
               <div key={cat.id} className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-bold ${rubroColor(cat.name)}`}>
+                {cat.admin_only && <span title="Solo Admin">🔒</span>}
                 {cat.name}
                 {isAdmin && cat.id !== 'general' && (
                   <button

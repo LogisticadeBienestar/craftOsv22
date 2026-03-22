@@ -901,10 +901,10 @@ async function startServer() {
 
   app.post('/api/expense-categories', async (req, res) => {
     try {
-      const { name } = req.body;
+      const { name, admin_only } = req.body;
       if (!name) return res.status(400).json({ error: 'Name required' });
       const id = name.toLowerCase().replace(/[^a-z0-9]/g, '_').replace(/_+/g, '_');
-      const { error } = await supabase.from('expense_categories').insert({ id, name });
+      const { error } = await supabase.from('expense_categories').insert({ id, name, admin_only: admin_only || false });
       if (error) throw error;
       res.json({ success: true, id });
     } catch (e: any) {
