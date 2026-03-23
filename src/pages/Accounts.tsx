@@ -231,9 +231,16 @@ export default function Accounts() {
       runningBalance += debit - credit;
 
       if (isOrder) {
-        text += `PEDIDO ${dateReminder} REMITO ${mov.serial_number || '-'} ${debit.toLocaleString()} ENVASES (${mov.container_quantity || 0}) SALDO $${runningBalance.toLocaleString()} .-\n\n`;
+        text += `PEDIDO ${dateReminder}\n`;
+        text += `REMITO ${mov.serial_number || '-'}  ${debit.toLocaleString()}\n`;
+        text += `ENVASES (${mov.container_quantity || 0})\n`;
+        text += `SALDO $${runningBalance.toLocaleString()} .-\n\n`;
+        text += `🔴 ${date} - ${detail}: +$${debit.toLocaleString()}\n\n`;
       } else {
-        text += `PAGO ${dateReminder} METODO ${mov.method || '-'} ${credit.toLocaleString()} SALDO $${runningBalance.toLocaleString()} .-\n\n`;
+        text += `PAGO ${dateReminder}\n`;
+        text += `METODO ${mov.method || '-'}  ${credit.toLocaleString()}\n`;
+        text += `SALDO $${runningBalance.toLocaleString()} .-\n\n`;
+        text += `🟢 ${date} - ${detail}: -$${credit.toLocaleString()}\n\n`;
       }
     }
 
