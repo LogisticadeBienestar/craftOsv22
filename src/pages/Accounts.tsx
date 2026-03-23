@@ -1,10 +1,11 @@
-import React, { useState, useEffect } from 'react';
-import { Search, ArrowUpRight, ArrowDownLeft, CircleAlert, CheckCircle2, AlertCircle, Plus, X, Download, MessageCircle } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Search, ArrowUpRight, ArrowDownLeft, CircleAlert, CheckCircle2, AlertCircle, Plus, X, Download, MessageCircle, Receipt, ExternalLink } from 'lucide-react';
 import { format } from 'date-fns';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { getRoundImageBase64 } from '../utils/logo';
 import { logoBase64 } from '../utils/logoData';
+import { supabase } from '../utils/supabase';
 
 export default function Accounts() {
   const [clients, setClients] = useState<any[]>([]);
@@ -55,6 +56,9 @@ export default function Accounts() {
   const [paymentAmount, setPaymentAmount] = useState('');
   const [paymentMethod, setPaymentMethod] = useState<'EFECTIVO' | 'TRANSFERENCIA'>('EFECTIVO');
   const [paymentOrderId, setPaymentOrderId] = useState<string | null>(null);
+  const [receiptFile, setReceiptFile] = useState<File | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const fetchClients = () => {
     fetch('/api/clients')
@@ -112,6 +116,7 @@ export default function Accounts() {
     setPaymentOrderId(orderId);
     setPaymentAmount(defaultAmount > 0 ? defaultAmount.toString() : '');
     setPaymentMethod('EFECTIVO');
+    setReceiptFile(null);
     setIsPaymentModalOpen(true);
   };
 
@@ -119,24 +124,53 @@ export default function Accounts() {
     e.preventDefault();
     if (!selectedClient || !paymentAmount) return;
 
-    const paymentData = {
-      id: crypto.randomUUID(),
-      client_id: selectedClient,
-      order_id: paymentOrderId,
-      amount: parseFloat(paymentAmount),
-      method: paymentMethod,
-      date: new Date().toISOString()
-    };
+    setIsSubmitting(true);
+    let receipt_url = null;
 
-    await fetch('/api/payments', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(paymentData)
-    });
+    try {
+      if (paymentMethod === 'TRANSFERENCIA' && receiptFile) {
+        const fileExt = receiptFile.name.split('.').pop();
+        const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
+        const filePath = `${selectedClient}/${fileName}`;
+        
+        const { error: uploadError } = await supabase.storage
+          .from('comprobantes')
+          .upload(filePath, receiptFile);
+          
+        if (!uploadError) {
+          const { data: publicUrlData } = supabase.storage
+            .from('comprobantes')
+            .getPublicUrl(filePath);
+          receipt_url = publicUrlData.publicUrl;
+        }
+      }
 
-    setIsPaymentModalOpen(false);
-    fetchAccountData();
-    fetchClients(); // Refresh client list to update balances
+      const paymentData = {
+        id: crypto.randomUUID(),
+        client_id: selectedClient,
+        order_id: paymentOrderId,
+        amount: parseFloat(paymentAmount),
+        method: paymentMethod,
+        date: new Date().toISOString(),
+        receipt_url
+      };
+
+      await fetch('/api/payments', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(paymentData)
+      });
+
+      setIsPaymentModalOpen(false);
+      setReceiptFile(null);
+      fetchAccountData();
+      fetchClients(); // Refresh client list to update balances
+    } catch (err) {
+      console.error(err);
+      alert('Error al registrar el pago');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const generateWhatsAppMessage = (type: 'report' | 'reminder') => {
@@ -527,8 +561,13 @@ export default function Accounts() {
                                 {format(new Date(mov.date), 'dd MMM yyyy HH:mm')}
                               </td>
                               <td className="px-6 py-4">
-                                <div className="font-bold text-white mb-1">
-                                  {isOrder ? `Remito / Factura ${mov.serial_number ? `#${mov.serial_number}` : ''}` : `Pago (${mov.method})${linkedOrder ? ` a Remito #${linkedOrder.serial_number || linkedOrder.id.substring(0, 8)}` : ''}`}
+                                <div className="font-bold text-white mb-1 flex items-center flex-wrap gap-2">
+                                  <span>{isOrder ? `Remito / Factura ${mov.serial_number ? `#${mov.serial_number}` : ''}` : `Pago (${mov.method})${linkedOrder ? ` a Remito #${linkedOrder.serial_number || linkedOrder.id.substring(0, 8)}` : ''}`}</span>
+                                  {!isOrder && mov.receipt_url && (
+                                    <a href={mov.receipt_url} target="_blank" rel="noopener noreferrer" className="bg-zinc-800 text-zinc-400 hover:text-white px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider transition-colors flex items-center gap-1">
+                                      <Receipt className="w-3 h-3" /> Ver Comprobante
+                                    </a>
+                                  )}
                                 </div>
                                 <div className="text-xs text-zinc-500 font-mono">
                                   {format(new Date(mov.date), 'dd MMM yyyy HH:mm')}
@@ -675,10 +714,34 @@ export default function Accounts() {
                 </div>
               </div>
 
+              {paymentMethod === 'TRANSFERENCIA' && (
+                <div>
+                  <label className="block text-xs font-bold text-zinc-500 tracking-wider uppercase mb-2">
+                    Comprobante (Opcional)
+                  </label>
+                  <div className="flex flex-col gap-2">
+                    <button
+                      onClick={() => fileInputRef.current?.click()}
+                      className={`py-3 rounded-xl text-sm font-bold tracking-wider transition-all flex items-center justify-center gap-2 ${receiptFile ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/50' : 'bg-zinc-900 border border-zinc-800 text-zinc-400 hover:border-zinc-700'}`}
+                      type="button"
+                    >
+                      <ExternalLink className="w-4 h-4" /> {receiptFile ? 'Adjunto: ' + receiptFile.name : 'Adjuntar PDF o Imagen'}
+                    </button>
+                    <input 
+                      type="file" 
+                      ref={fileInputRef} 
+                      className="hidden" 
+                      accept="image/*,application/pdf"
+                      onChange={(e) => setReceiptFile(e.target.files?.[0] || null)}
+                    />
+                  </div>
+                </div>
+              )}
+
               <div className="pt-4">
                 <button
                   type="submit"
-                  disabled={!paymentAmount || parseFloat(paymentAmount) <= 0}
+                  disabled={!paymentAmount || parseFloat(paymentAmount) <= 0 || isSubmitting}
                   className="w-full bg-white text-black rounded-xl py-4 text-sm font-bold tracking-widest uppercase hover:bg-zinc-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Confirmar Pago

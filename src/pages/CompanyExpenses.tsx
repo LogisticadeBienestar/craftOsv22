@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import { supabase } from '../utils/supabase';
 import { useAuth } from '../context/AuthContext';
 import { format } from 'date-fns';
 import { Calendar, Receipt, ExternalLink, Trash2, Edit2, Check, X, Plus, Tag } from 'lucide-react';
@@ -34,6 +35,8 @@ export default function CompanyExpenses() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [history, setHistory] = useState<any[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
+  const [receiptFile, setReceiptFile] = useState<File | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Re-imputation state (admin only)
   const [editingRubroId, setEditingRubroId] = useState<string | null>(null);
@@ -86,7 +89,27 @@ export default function CompanyExpenses() {
     if (!currentUser || !amount || !description) return;
 
     setIsSubmitting(true);
+    let receipt_url = null;
+
     try {
+      if (receiptFile) {
+        const fileExt = receiptFile.name.split('.').pop();
+        const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
+        const filePath = `${currentUser.id}/${fileName}`;
+        
+        const { error: uploadError } = await supabase.storage
+          .from('comprobantes')
+          .upload(filePath, receiptFile);
+          
+        if (uploadError) throw uploadError;
+        
+        const { data: publicUrlData } = supabase.storage
+          .from('comprobantes')
+          .getPublicUrl(filePath);
+          
+        receipt_url = publicUrlData.publicUrl;
+      }
+
       const res = await fetch('/api/company-expenses', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -95,7 +118,8 @@ export default function CompanyExpenses() {
           user_id: currentUser.id,
           amount: parseFloat(amount),
           description,
-          rubro
+          rubro,
+          receipt_url
         })
       });
 
@@ -104,6 +128,7 @@ export default function CompanyExpenses() {
         setAmount('');
         setDescription('');
         setRubro('General');
+        setReceiptFile(null);
         fetchAllHistory();
       } else {
         throw new Error('Error al guardar');
@@ -269,14 +294,20 @@ export default function CompanyExpenses() {
               <Receipt className="w-4 h-4 text-white" />
               <span className="text-sm font-bold text-white tracking-wider uppercase">Nuevo Gasto</span>
             </div>
-            <a
-              href="https://docs.google.com/forms/d/e/1FAIpQLScflhbga5QpG-koGuTGFH4cwF64gje57yQG6QfEdHzXIJ_M-g/viewform?usp=publish-editor"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-xs font-bold bg-blue-500/10 text-blue-400 px-3 py-1.5 rounded-lg flex items-center gap-2 hover:bg-blue-500/20 transition-colors"
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              className={`text-xs font-bold px-3 py-1.5 rounded-lg flex items-center gap-2 transition-colors ${receiptFile ? 'bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20' : 'bg-blue-500/10 text-blue-400 hover:bg-blue-500/20'}`}
+              type="button"
             >
-              <ExternalLink className="w-3 h-3" /> Subir Comprobante
-            </a>
+              <ExternalLink className="w-3 h-3" /> {receiptFile ? 'Comprobante Adjunto' : 'Adjuntar Comprobante'}
+            </button>
+            <input 
+              type="file" 
+              ref={fileInputRef} 
+              className="hidden" 
+              accept="image/*,application/pdf"
+              onChange={(e) => setReceiptFile(e.target.files?.[0] || null)}
+            />
           </div>
 
           <form onSubmit={handleSaveExpense} className="p-8 flex flex-col items-center justify-center">
@@ -364,9 +395,8 @@ export default function CompanyExpenses() {
               </div>
 
               <div className="pt-2">
-                <p className="text-xs text-zinc-500 mb-4 text-center">
-                  Asegúrate de haber adjuntado el comprobante fotográfico en el botón de Google Forms.
-                </p>
+                {receiptFile && <p className="text-xs font-bold text-emerald-500 mb-4 text-center">✔ Archivo listo para subir: {receiptFile.name}</p>}
+                {!receiptFile && <p className="text-xs text-zinc-500 mb-4 text-center">Recuerda adjuntar el comprobante fotográfico usando el botón de arriba.</p>}
                 <button
                   type="submit"
                   disabled={isSubmitting || !amount || !description}
@@ -394,6 +424,11 @@ export default function CompanyExpenses() {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
                       <p className="text-sm font-bold text-white truncate">{item.description}</p>
+                      {item.receipt_url && (
+                        <a href={item.receipt_url} target="_blank" rel="noopener noreferrer" className="bg-zinc-800 text-zinc-400 hover:text-white px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider transition-colors flex items-center gap-1">
+                          <Receipt className="w-3 h-3" /> Ver
+                        </a>
+                      )}
                       {/* Rubro badge */}
                       {editingRubroId === item.id ? (
                         <div className="flex items-center gap-2">

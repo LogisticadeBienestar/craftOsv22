@@ -488,10 +488,10 @@ async function startServer() {
 
   // Payments
   app.post('/api/payments', async (req, res) => {
-    const { id, client_id, order_id, amount, method, date } = req.body;
+    const { id, client_id, order_id, amount, method, date, receipt_url } = req.body;
 
     try {
-      const { error: insertError } = await supabase.from('payments').insert({ id, client_id, order_id, amount, method, date });
+      const { error: insertError } = await supabase.from('payments').insert({ id, client_id, order_id, amount, method, date, receipt_url: receipt_url || null });
       if (insertError) throw insertError;
 
       // Update client balance
@@ -852,10 +852,10 @@ async function startServer() {
 
   app.post('/api/company-expenses', async (req, res) => {
     try {
-      const { id, date, user_id, description, amount, rubro } = req.body;
+      const { id, date, user_id, description, amount, rubro, receipt_url } = req.body;
       const expenseId = id || crypto.randomUUID();
       const { error } = await supabase.from('company_expenses').insert({
-        id: expenseId, date, user_id, description, amount, rubro: rubro || 'General'
+        id: expenseId, date, user_id, description, amount, rubro: rubro || 'General', receipt_url: receipt_url || null
       });
       if (error) throw error;
       res.json({ success: true, id: expenseId });
