@@ -25,7 +25,7 @@ function rubroColor(rubro: string) {
 
 export default function CompanyExpenses() {
   const { currentUser } = useAuth();
-  const isAdmin = currentUser?.role === 'admin';
+  const isAdmin = currentUser?.role === 'ADMIN' || currentUser?.role === 'admin';
 
   const [date, setDate] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [description, setDescription] = useState('');
@@ -181,8 +181,8 @@ export default function CompanyExpenses() {
     }
   };
 
-  // Categories visible to current user in the dropdown
   const visibleCategories = isAdmin ? categories : categories.filter((c: any) => !c.admin_only);
+  // If categories haven't loaded yet (e.g. admin_only column missing), show default set for admin
   const categoryNames = visibleCategories.map((c: any) => c.name);
 
   return (
