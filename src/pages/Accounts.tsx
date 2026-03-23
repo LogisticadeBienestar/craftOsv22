@@ -155,16 +155,10 @@ export default function Accounts() {
 
     let text = '';
     
-    if (type === 'reminder') {
-      text += `Hola *${client.name}* 👋\n`;
-      text += `Te escribimos para recordarte que tenés un saldo pendiente de pago de *$${Math.abs(clientData.balance).toLocaleString()}*.\n\n`;
-      text += `Para tu control, te compartimos el detalle de cómo está compuesto:\n\n`;
-    } else {
-      text += `*Reporte de Cuenta Corriente*\n`;
-      text += `👤 *Cliente:* ${client.name}\n`;
-      text += `💰 *Saldo Pendiente:* $${Math.abs(clientData.balance).toLocaleString()}\n\n`;
-      text += `*Detalle de Movimientos:*\n\n`;
-    }
+    text += `*Reporte de Cuenta Corriente*\n`;
+    text += `👤 *Cliente:* ${client.name}\n`;
+    text += `💰 *Saldo Pendiente:* $${Math.abs(clientData.balance).toLocaleString()}\n\n`;
+    text += `*Detalle de Movimientos:*\n\n`;
 
     if (initialBalance !== 0 || initialObservation) {
       text += `🔸 *Saldo Inicial:* $${initialBalance.toLocaleString()}\n`;
@@ -177,9 +171,7 @@ export default function Accounts() {
 
     const recentMovements = sortedMovements.slice(-15);
     if (sortedMovements.length > 15) {
-      if (type !== 'reminder') {
-        text += `_(Mostrando últimos 15 movimientos...)_\n`;
-      }
+      text += `_(Mostrando últimos 15 movimientos...)_\n\n`;
       const previousMovements = sortedMovements.slice(0, sortedMovements.length - 15);
       for (const mov of previousMovements) {
         const debit = mov.type === 'order' ? mov.total_amount : 0;
@@ -200,39 +192,25 @@ export default function Accounts() {
         detail = `Pago (${mov.method})`;
       }
 
-      const previousBalance = runningBalance;
       const debit = isOrder ? mov.total_amount : 0;
       const credit = !isOrder ? mov.amount : 0;
       runningBalance += debit - credit;
 
-      if (type === 'reminder') {
-        text += `- Saldo Inicial: $ ${previousBalance.toLocaleString()}\n`;
-        if (isOrder) {
-          text += `- PEDIDO: ${dateReminder}\n`;
-          text += `- REMITO: ${mov.serial_number || '-'}\n`;
-          text += `- ENVASES: (${mov.container_quantity || 0})\n`;
-        } else {
-          text += `- PAGO: ${dateReminder}\n`;
-          text += `- METODO: ${mov.method || '-'}\n`;
-          text += `- MONTO: $${credit.toLocaleString()}\n`;
-        }
-        text += `- SALDO $${runningBalance.toLocaleString()} .-\n\n`;
+      if (isOrder) {
+        text += `PEDIDO ${dateReminder}\n`;
+        text += `REMITO ${mov.serial_number || '-'}  ${debit.toLocaleString()}\n`;
+        text += `ENVASES (${mov.container_quantity || 0})\n`;
+        text += `SALDO $${runningBalance.toLocaleString()} .-\n\n`;
+        text += `🔴 ${date} - ${detail}: +$${debit.toLocaleString()}\n\n`;
       } else {
-        if (isOrder) {
-          text += `🔴 ${date} - ${detail}: +$${debit.toLocaleString()}\n`;
-        } else {
-          text += `🟢 ${date} - ${detail}: -$${credit.toLocaleString()}\n`;
-        }
+        text += `PAGO ${dateReminder}\n`;
+        text += `METODO ${mov.method || '-'}  ${credit.toLocaleString()}\n`;
+        text += `SALDO $${runningBalance.toLocaleString()} .-\n\n`;
+        text += `🟢 ${date} - ${detail}: -$${credit.toLocaleString()}\n\n`;
       }
     }
 
-    if (type !== 'reminder' && recentMovements.length > 0) {
-      text += `\n*Saldo Actual: $${Math.abs(clientData.balance).toLocaleString()}*\n`;
-    }
-
-    if (type === 'reminder') {
-      text += `\nAvisanos cuando puedas realizar el pago o si tenés alguna duda. ¡Gracias!`;
-    }
+    text += `*Saldo Actual: $${Math.abs(clientData.balance).toLocaleString()}*\n`;
 
     return text;
   };
