@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
+import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import { Search, FileText, Trash2, LayoutDashboard, Truck, Droplets, Car, DollarSign, Briefcase, CheckSquare, X, Printer, Receipt, Filter, ChevronDown, ChevronUp } from 'lucide-react';
+import { Search, FileText, Trash2, LayoutDashboard, Truck, Droplets, Car, DollarSign, Briefcase, CheckSquare, X, Printer, Receipt, Filter, ChevronDown, ChevronUp, Download } from 'lucide-react';
 import { format, parseISO, isWithinInterval, startOfDay, endOfDay } from 'date-fns';
 import toast from 'react-hot-toast';
 import { getRoundImageBase64 } from '../utils/logo';
@@ -875,7 +876,13 @@ export default function Audits() {
                       <td className="px-6 py-4 font-medium text-white">{getUserName(record.user_id)}</td>
                       <td className="px-6 py-4 text-zinc-300">{record.description}</td>
                       <td className="px-6 py-4">
-                        <span className="text-xs text-blue-400 bg-blue-500/10 px-2 py-1 rounded-full whitespace-nowrap">Ver en Google Drive</span>
+                        {record.receipt_url ? (
+                          <a href={record.receipt_url} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-400 bg-blue-500/10 hover:bg-blue-500/20 px-3 py-1.5 rounded-full whitespace-nowrap transition-colors flex items-center gap-1 w-fit font-bold">
+                            <Receipt className="w-3 h-3" /> Ver
+                          </a>
+                        ) : (
+                          <span className="text-[10px] text-zinc-500 uppercase tracking-wider font-bold">Sin comprobante</span>
+                        )}
                       </td>
                       <td className="px-6 py-4 font-medium text-emerald-400">${record.amount.toLocaleString()}</td>
                       <td className="px-6 py-4 text-right">
@@ -994,9 +1001,16 @@ export default function Audits() {
                         <tr key={idx}>
                           <td className="px-4 py-3 text-zinc-400">{formatDate(payment.date)}</td>
                           <td className="px-4 py-3">
-                            <span className={`px-2 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${payment.method === 'EFECTIVO' ? 'bg-emerald-500/10 text-emerald-500' : 'bg-blue-500/10 text-blue-500'}`}>
-                              {payment.method}
-                            </span>
+                            <div className="flex items-center gap-2">
+                              <span className={`px-2 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${payment.method === 'EFECTIVO' ? 'bg-emerald-500/10 text-emerald-500' : 'bg-blue-500/10 text-blue-500'}`}>
+                                {payment.method}
+                              </span>
+                              {payment.receipt_url && (
+                                <a href={payment.receipt_url} target="_blank" rel="noopener noreferrer" title="Ver Comprobante" className="text-zinc-400 hover:text-white transition-colors bg-zinc-800 hover:bg-zinc-700 p-1.5 rounded-md flex items-center">
+                                  <Receipt className="w-3 h-3" />
+                                </a>
+                              )}
+                            </div>
                           </td>
                           <td className="px-4 py-3 text-right font-mono text-emerald-400 font-bold">${payment.amount.toLocaleString()}</td>
                         </tr>
