@@ -194,18 +194,8 @@ export default function Accounts() {
     text += `💰 *Saldo Pendiente:* $${Math.abs(clientData.balance).toLocaleString()}\n\n`;
     text += `*Detalle de Movimientos:*\n\n`;
 
-    if (initialBalance !== 0 || initialObservation) {
-      text += `🔸 *Saldo Inicial:* $${initialBalance.toLocaleString()}\n`;
-      if (initialObservation) {
-        text += `${initialObservation}\n\n`;
-      } else {
-        text += `\n`;
-      }
-    }
-
     const recentMovements = sortedMovements.slice(-15);
     if (sortedMovements.length > 15) {
-      text += `_(Mostrando últimos 15 movimientos...)_\n\n`;
       const previousMovements = sortedMovements.slice(0, sortedMovements.length - 15);
       for (const mov of previousMovements) {
         const debit = mov.type === 'order' ? mov.total_amount : 0;
@@ -219,28 +209,20 @@ export default function Accounts() {
       const date = format(new Date(mov.date), 'dd/MM');
       const dateReminder = format(new Date(mov.date), 'dd-MM-yy');
       
-      let detail = '';
-      if (isOrder) {
-        detail = `Remito ${mov.serial_number ? `#${mov.serial_number}` : ''}`;
-      } else {
-        detail = `Pago (${mov.method})`;
-      }
+      const detail = isOrder
+        ? `Remito ${mov.serial_number ? `#${mov.serial_number}` : ''}`
+        : `Pago (${mov.method})`;
 
       const debit = isOrder ? mov.total_amount : 0;
       const credit = !isOrder ? mov.amount : 0;
       runningBalance += debit - credit;
 
       if (isOrder) {
-        text += `PEDIDO ${dateReminder}\n`;
-        text += `REMITO ${mov.serial_number || '-'}  ${debit.toLocaleString()}\n`;
-        text += `ENVASES (${mov.container_quantity || 0})\n`;
-        text += `SALDO $${runningBalance.toLocaleString()} .-\n\n`;
+        text += `PEDIDO ${dateReminder} \n`;
+        text += `REMITO ${mov.serial_number || '-'}  ${debit.toLocaleString()}      \n`;
+        text += `ENVASES (${mov.container_quantity || 0}) \n`;
+        text += `SALDO $${runningBalance.toLocaleString()}.-\n\n`;
         text += `🔴 ${date} - ${detail}: +$${debit.toLocaleString()}\n\n`;
-      } else {
-        text += `PAGO ${dateReminder}\n`;
-        text += `METODO ${mov.method || '-'}  ${credit.toLocaleString()}\n`;
-        text += `SALDO $${runningBalance.toLocaleString()} .-\n\n`;
-        text += `🟢 ${date} - ${detail}: -$${credit.toLocaleString()}\n\n`;
       }
     }
 
