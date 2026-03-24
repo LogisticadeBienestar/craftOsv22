@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Search, ArrowUpRight, ArrowDownLeft, CircleAlert, CheckCircle2, AlertCircle, Plus, X, Download, MessageCircle, Receipt, ExternalLink } from 'lucide-react';
+import { Search, ArrowUpRight, ArrowDownLeft, CircleAlert, CheckCircle2, AlertCircle, Plus, X, Download, MessageCircle, Receipt, ExternalLink, Settings, Copy, Check } from 'lucide-react';
 import { format } from 'date-fns';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -59,6 +59,20 @@ export default function Accounts() {
   const [receiptFile, setReceiptFile] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Personalizar Mensaje Modal State
+  const [isCustomizeOpen, setIsCustomizeOpen] = useState(false);
+  const [customFields, setCustomFields] = useState({
+    saldoAnterior: true,
+    montoRemito: true,
+    envasesDevueltos: true,
+    montoEnvases: false,
+    cobranzaParcial: false,
+    saldoActual: true,
+    comentarios: false,
+  });
+  const [customComment, setCustomComment] = useState('');
+  const [copiedCustom, setCopiedCustom] = useState(false);
 
   const fetchClients = () => {
     fetch('/api/clients')
@@ -173,7 +187,7 @@ export default function Accounts() {
     }
   };
 
-  const generateWhatsAppMessage = (type: 'report' | 'reminder') => {
+  const buildMessageData = () => {
     if (!selectedClient || !clientData) return null;
     const client = clients.find(c => c.id === selectedClient);
     if (!client) return null;
@@ -185,50 +199,88 @@ export default function Accounts() {
       else sumOfMovements -= mov.amount;
     }
     const initialBalance = clientData.balance - sumOfMovements;
-    let runningBalance = initialBalance;
-
-    let text = '';
-    
-    text += `*Reporte de Cuenta Corriente*\n`;
-    text += `👤 *Cliente:* ${client.name}\n`;
-    text += `💰 *Saldo Pendiente:* $${Math.abs(clientData.balance).toLocaleString()}\n\n`;
-    text += `*Detalle de Movimientos:*\n\n`;
-
     const recentMovements = sortedMovements.slice(-15);
-    if (sortedMovements.length > 15) {
-      const previousMovements = sortedMovements.slice(0, sortedMovements.length - 15);
-      for (const mov of previousMovements) {
-        const debit = mov.type === 'order' ? mov.total_amount : 0;
-        const credit = mov.type !== 'order' ? mov.amount : 0;
-        runningBalance += debit - credit;
+
+    // Calcular monto total de envases devueltos (container_total) y cobranzas parciales
+    const orders = recentMovements.filter(m => m.type === 'order');
+    const payments = recentMovements.filter(m => m.type !== 'order');
+
+    return { client, initialBalance, orders, payments, currentBalance: clientData.balance };
+  };
+
+  const generateWhatsAppMessage = (_type: 'report' | 'reminder') => {
+    const data = buildMessageData();
+    if (!data) return null;
+    const { client, initialBalance, orders, currentBalance } = data;
+
+    let text = `*Reporte de Cuenta Corriente*\n`;
+    text += `👤 *Cliente:* ${client.name}\n\n`;
+    text += `*Detalle de Movimientos:*\n`;
+    text += `Saldo Anterior: $${initialBalance.toLocaleString()}\n`;
+
+    for (const mov of orders) {
+      const date = format(new Date(mov.date), 'dd/MM/yy');
+      text += `\nFecha de Pedido: ${date}\n`;
+      text += `Remito N°  ${mov.serial_number || '-'}: $${mov.total_amount.toLocaleString()}\n`;
+      text += `Envases Devueltos: ${mov.containers_returned || 0}\n`;
+    }
+
+    text += `\n*Saldo Actual: $${currentBalance.toLocaleString()}*\n`;
+    return text;
+  };
+
+  const generateCustomMessage = () => {
+    const data = buildMessageData();
+    if (!data) return '';
+    const { client, initialBalance, orders, payments, currentBalance } = data;
+
+    let text = `*Reporte de Cuenta Corriente*\n`;
+    text += `👤 *Cliente:* ${client.name}\n\n`;
+    text += `*Detalle de Movimientos:*\n`;
+
+    if (customFields.saldoAnterior) {
+      text += `Saldo Anterior: $${initialBalance.toLocaleString()}\n`;
+    }
+
+    for (const mov of orders) {
+      const date = format(new Date(mov.date), 'dd/MM/yy');
+      text += `\nFecha de Pedido: ${date}\n`;
+      if (customFields.montoRemito) {
+        text += `Remito N°  ${mov.serial_number || '-'}: $${mov.total_amount.toLocaleString()}\n`;
+      }
+      if (customFields.envasesDevueltos) {
+        text += `Envases Devueltos: ${mov.containers_returned || 0}\n`;
+      }
+      if (customFields.montoEnvases && mov.container_total > 0) {
+        text += `Monto Envases: $${(mov.container_total || 0).toLocaleString()}\n`;
       }
     }
 
-    for (const mov of recentMovements) {
-      const isOrder = mov.type === 'order';
-      const date = format(new Date(mov.date), 'dd/MM');
-      const dateReminder = format(new Date(mov.date), 'dd-MM-yy');
-      
-      const detail = isOrder
-        ? `Remito ${mov.serial_number ? `#${mov.serial_number}` : ''}`
-        : `Pago (${mov.method})`;
-
-      const debit = isOrder ? mov.total_amount : 0;
-      const credit = !isOrder ? mov.amount : 0;
-      runningBalance += debit - credit;
-
-      if (isOrder) {
-        text += `PEDIDO ${dateReminder} \n`;
-        text += `REMITO ${mov.serial_number || '-'}  ${debit.toLocaleString()}      \n`;
-        text += `ENVASES (${mov.container_quantity || 0}) \n`;
-        text += `SALDO $${runningBalance.toLocaleString()}.-\n\n`;
-        text += `🔴 ${date} - ${detail}: +$${debit.toLocaleString()}\n\n`;
+    if (customFields.cobranzaParcial && payments.length > 0) {
+      text += `\n*Cobros registrados:*\n`;
+      for (const pago of payments) {
+        const date = format(new Date(pago.date), 'dd/MM/yy');
+        text += `Pago ${date} (${pago.method}): $${pago.amount.toLocaleString()}\n`;
       }
     }
 
-    text += `*Saldo Actual: $${Math.abs(clientData.balance).toLocaleString()}*\n`;
+    if (customFields.saldoActual) {
+      text += `\n*Saldo Actual: $${currentBalance.toLocaleString()}*\n`;
+    }
+
+    if (customFields.comentarios && customComment.trim()) {
+      text += `\n📝 ${customComment.trim()}\n`;
+    }
 
     return text;
+  };
+
+  const handleCopyCustom = () => {
+    const text = generateCustomMessage();
+    navigator.clipboard.writeText(text).then(() => {
+      setCopiedCustom(true);
+      setTimeout(() => setCopiedCustom(false), 2000);
+    });
   };
 
   const handleWhatsAppShare = (type: 'report' | 'reminder') => {
@@ -377,11 +429,11 @@ export default function Accounts() {
               <MessageCircle className="w-4 h-4" /> Cobrar
             </button>
             <button
-              onClick={() => handleWhatsAppShare('report')}
-              className="bg-zinc-800 text-white px-3 py-2 rounded-lg text-xs font-bold tracking-wider uppercase flex items-center gap-1 hover:bg-zinc-700 transition-colors"
-              title="Copiar Reporte para WhatsApp"
+              onClick={() => { setIsCustomizeOpen(true); }}
+              className="bg-violet-600/20 text-violet-400 px-3 py-2 rounded-lg text-xs font-bold tracking-wider uppercase flex items-center gap-1 hover:bg-violet-600/30 transition-colors"
+              title="Personalizar mensaje de WhatsApp"
             >
-              <MessageCircle className="w-4 h-4" /> Reporte WA
+              <Settings className="w-4 h-4" /> Personalizar
             </button>
             <button
               onClick={generateReport}
@@ -730,6 +782,122 @@ export default function Accounts() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Customize Message Modal */}
+      {isCustomizeOpen && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-zinc-950 border border-zinc-800 rounded-2xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh]">
+            <div className="p-6 border-b border-zinc-800 flex justify-between items-center bg-zinc-900/50">
+              <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                <Settings className="w-5 h-5 text-violet-400" />
+                Personalizar Mensaje
+              </h3>
+              <button
+                onClick={() => setIsCustomizeOpen(false)}
+                className="text-zinc-500 hover:text-white transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            
+            <div className="flex-1 overflow-y-auto p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Controles de personalización */}
+              <div className="space-y-4">
+                <h4 className="text-sm font-bold text-white uppercase tracking-wider mb-4 border-b border-zinc-800 pb-2">Campos a incluir</h4>
+                
+                <label className="flex items-center gap-3 cursor-pointer group">
+                  <div className={`w-5 h-5 rounded flex items-center justify-center border transition-colors ${customFields.saldoAnterior ? 'bg-violet-500 border-violet-500' : 'border-zinc-700 group-hover:border-zinc-500'}`}>
+                    {customFields.saldoAnterior && <Check className="w-3 h-3 text-white" />}
+                  </div>
+                  <input type="checkbox" className="hidden" checked={customFields.saldoAnterior} onChange={(e) => setCustomFields({...customFields, saldoAnterior: e.target.checked})} />
+                  <span className="text-sm text-zinc-300">Saldo Anterior</span>
+                </label>
+
+                <label className="flex items-center gap-3 cursor-pointer group">
+                  <div className={`w-5 h-5 rounded flex items-center justify-center border transition-colors ${customFields.montoRemito ? 'bg-violet-500 border-violet-500' : 'border-zinc-700 group-hover:border-zinc-500'}`}>
+                    {customFields.montoRemito && <Check className="w-3 h-3 text-white" />}
+                  </div>
+                  <input type="checkbox" className="hidden" checked={customFields.montoRemito} onChange={(e) => setCustomFields({...customFields, montoRemito: e.target.checked})} />
+                  <span className="text-sm text-zinc-300">Monto de Remito</span>
+                </label>
+
+                <label className="flex items-center gap-3 cursor-pointer group">
+                  <div className={`w-5 h-5 rounded flex items-center justify-center border transition-colors ${customFields.envasesDevueltos ? 'bg-violet-500 border-violet-500' : 'border-zinc-700 group-hover:border-zinc-500'}`}>
+                    {customFields.envasesDevueltos && <Check className="w-3 h-3 text-white" />}
+                  </div>
+                  <input type="checkbox" className="hidden" checked={customFields.envasesDevueltos} onChange={(e) => setCustomFields({...customFields, envasesDevueltos: e.target.checked})} />
+                  <span className="text-sm text-zinc-300">Envases Devueltos</span>
+                </label>
+
+                <label className="flex items-center gap-3 cursor-pointer group">
+                  <div className={`w-5 h-5 rounded flex items-center justify-center border transition-colors ${customFields.montoEnvases ? 'bg-violet-500 border-violet-500' : 'border-zinc-700 group-hover:border-zinc-500'}`}>
+                    {customFields.montoEnvases && <Check className="w-3 h-3 text-white" />}
+                  </div>
+                  <input type="checkbox" className="hidden" checked={customFields.montoEnvases} onChange={(e) => setCustomFields({...customFields, montoEnvases: e.target.checked})} />
+                  <span className="text-sm text-zinc-300">Monto Envases devueltos</span>
+                </label>
+
+                <label className="flex items-center gap-3 cursor-pointer group">
+                  <div className={`w-5 h-5 rounded flex items-center justify-center border transition-colors ${customFields.cobranzaParcial ? 'bg-violet-500 border-violet-500' : 'border-zinc-700 group-hover:border-zinc-500'}`}>
+                    {customFields.cobranzaParcial && <Check className="w-3 h-3 text-white" />}
+                  </div>
+                  <input type="checkbox" className="hidden" checked={customFields.cobranzaParcial} onChange={(e) => setCustomFields({...customFields, cobranzaParcial: e.target.checked})} />
+                  <span className="text-sm text-zinc-300">Cobranza Parcial</span>
+                </label>
+
+                <label className="flex items-center gap-3 cursor-pointer group">
+                  <div className={`w-5 h-5 rounded flex items-center justify-center border transition-colors ${customFields.saldoActual ? 'bg-violet-500 border-violet-500' : 'border-zinc-700 group-hover:border-zinc-500'}`}>
+                    {customFields.saldoActual && <Check className="w-3 h-3 text-white" />}
+                  </div>
+                  <input type="checkbox" className="hidden" checked={customFields.saldoActual} onChange={(e) => setCustomFields({...customFields, saldoActual: e.target.checked})} />
+                  <span className="text-sm text-zinc-300">Saldo Actual</span>
+                </label>
+
+                <div className="pt-2">
+                  <label className="flex items-center gap-3 cursor-pointer group mb-2">
+                    <div className={`w-5 h-5 rounded flex items-center justify-center border transition-colors ${customFields.comentarios ? 'bg-violet-500 border-violet-500' : 'border-zinc-700 group-hover:border-zinc-500'}`}>
+                      {customFields.comentarios && <Check className="w-3 h-3 text-white" />}
+                    </div>
+                    <input type="checkbox" className="hidden" checked={customFields.comentarios} onChange={(e) => setCustomFields({...customFields, comentarios: e.target.checked})} />
+                    <span className="text-sm text-zinc-300">Comentarios</span>
+                  </label>
+                  {customFields.comentarios && (
+                    <textarea
+                      value={customComment}
+                      onChange={(e) => setCustomComment(e.target.value)}
+                      placeholder="Escribe un comentario adicional..."
+                      className="w-full bg-zinc-900 border border-zinc-800 rounded-lg p-3 text-sm text-white focus:outline-none focus:border-violet-500 focus:ring-1 focus:ring-violet-500 min-h-[80px]"
+                    />
+                  )}
+                </div>
+              </div>
+
+              {/* Vista previa */}
+              <div className="flex flex-col h-full">
+                <h4 className="text-sm font-bold text-white uppercase tracking-wider mb-4 border-b border-zinc-800 pb-2">Vista Previa</h4>
+                <div className="flex-1 bg-zinc-900 border border-zinc-800 rounded-xl p-4 overflow-y-auto whitespace-pre-wrap text-sm text-zinc-300 font-mono">
+                  {generateCustomMessage()}
+                </div>
+              </div>
+            </div>
+
+            <div className="p-6 border-t border-zinc-800 bg-zinc-900/30 flex justify-end gap-3">
+              <button
+                onClick={() => setIsCustomizeOpen(false)}
+                className="px-4 py-2 text-sm font-bold text-zinc-400 hover:text-white transition-colors"
+              >
+                Cerrar
+              </button>
+              <button
+                onClick={handleCopyCustom}
+                className="bg-violet-600 text-white px-6 py-2 rounded-lg text-sm font-bold tracking-wider uppercase flex items-center gap-2 hover:bg-violet-500 transition-colors"
+              >
+                {copiedCustom ? <><Check className="w-4 h-4" /> Copiado</> : <><Copy className="w-4 h-4" /> Copiar Mensaje</>}
+              </button>
+            </div>
           </div>
         </div>
       )}
