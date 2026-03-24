@@ -222,6 +222,29 @@ export default function Invoices() {
     return a.name.localeCompare(b.name, 'es');
   });
 
+  const sortedClients = [...clients].sort((a, b) => a.name.localeCompare(b.name, 'es'));
+
+  const customSkuOrder = [
+    'YOG-NAT-910',
+    'BEB-NAT-500',
+    'GRI-NAT-200',
+    'GRI-XL-800',
+    'BEB-VAI-500',
+    'BEB-VAI-910',
+    'UNT-NAT-200',
+    'LEC-ENT-910',
+    'MAN-YOG-100',
+    'MAN-YOG-200'
+  ];
+  const sortedProducts = [...products].sort((a, b) => {
+    const indexA = customSkuOrder.indexOf(a.sku);
+    const indexB = customSkuOrder.indexOf(b.sku);
+    if (indexA !== -1 && indexB !== -1) return indexA - indexB;
+    if (indexA !== -1) return -1;
+    if (indexB !== -1) return 1;
+    return a.name.localeCompare(b.name, 'es');
+  });
+
   const handleAddItem = () => {
     setItems([...items, { product_id: '', quantity: 1, price: 0 }]);
   };
