@@ -277,24 +277,61 @@ export default function Accounts() {
 
   const handleCopyCustom = () => {
     const text = generateCustomMessage();
-    navigator.clipboard.writeText(text).then(() => {
-      setCopiedCustom(true);
-      setTimeout(() => setCopiedCustom(false), 2000);
-    });
+    if (!text) return;
+
+    const copyToClipboardFallback = (text: string) => {
+      const textArea = document.createElement("textarea");
+      textArea.value = text;
+      document.body.appendChild(textArea);
+      textArea.select();
+      try {
+        document.execCommand('copy');
+        setCopiedCustom(true);
+        setTimeout(() => setCopiedCustom(false), 2000);
+      } catch (err) {
+        console.error('Fallback copy failed', err);
+      }
+      document.body.removeChild(textArea);
+    };
+
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(text).then(() => {
+        setCopiedCustom(true);
+        setTimeout(() => setCopiedCustom(false), 2000);
+      }).catch((err) => {
+        console.error('Clipboard API failed', err);
+        copyToClipboardFallback(text);
+      });
+    } else {
+      copyToClipboardFallback(text);
+    }
+  };
+
+  const handleSendCustomWhatsApp = () => {
+    const text = generateCustomMessage();
+    if (!text) return;
+    window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
   };
 
   const handleWhatsAppShare = (type: 'report' | 'reminder') => {
     const text = generateWhatsAppMessage(type);
     if (!text) return;
     
-    // Copy to clipboard
-    navigator.clipboard.writeText(text).then(() => {
-      alert('Texto copiado al portapapeles. Listo para pegar en WhatsApp.');
-    }).catch(err => {
-      console.error('Failed to copy', err);
-      // Fallback: open whatsapp link
+    const fallbackWhatsApp = () => {
       window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
-    });
+    };
+
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(text).then(() => {
+        alert('Texto copiado al portapapeles. Listo para pegar en WhatsApp.');
+        fallbackWhatsApp();
+      }).catch(err => {
+        console.error('Failed to copy', err);
+        fallbackWhatsApp();
+      });
+    } else {
+      fallbackWhatsApp();
+    }
   };
 
   const generateReport = async () => {
@@ -893,9 +930,15 @@ export default function Accounts() {
               </button>
               <button
                 onClick={handleCopyCustom}
-                className="bg-violet-600 text-white px-6 py-2 rounded-lg text-sm font-bold tracking-wider uppercase flex items-center gap-2 hover:bg-violet-500 transition-colors"
+                className="bg-zinc-800 text-white px-6 py-2 rounded-lg text-sm font-bold tracking-wider uppercase flex items-center gap-2 hover:bg-zinc-700 transition-colors"
               >
-                {copiedCustom ? <><Check className="w-4 h-4" /> Copiado</> : <><Copy className="w-4 h-4" /> Copiar Mensaje</>}
+                {copiedCustom ? <><Check className="w-4 h-4" /> Copiado</> : <><Copy className="w-4 h-4" /> Copiar</>}
+              </button>
+              <button
+                onClick={handleSendCustomWhatsApp}
+                className="bg-emerald-600 text-white px-6 py-2 rounded-lg text-sm font-bold tracking-wider uppercase flex items-center gap-2 hover:bg-emerald-500 transition-colors"
+              >
+                <MessageCircle className="w-4 h-4" /> Enviar por WhatsApp
               </button>
             </div>
           </div>
